@@ -7,9 +7,9 @@ export type AIAnalysisResult = {
 };
 
 export async function analyzeLeadMessage(text: string): Promise<AIAnalysisResult> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    console.warn("GEMINI_API_KEY is not set. Using fallback logic for lead analysis.");
+    console.warn("OPENAI_API_KEY is not set. Using fallback logic for lead analysis.");
     return {
       department: "General",
       problem: text,
@@ -17,8 +17,7 @@ export async function analyzeLeadMessage(text: string): Promise<AIAnalysisResult
     };
   }
 
-  const prompt = `You are an expert medical AI assistant for Crest Care Hospital.
-Analyze the following patient message and extract the appropriate medical department, a concise problem summary, and priority level.
+  const prompt = `Analyze the following patient message and extract the appropriate medical department, a concise problem summary, and priority level.
 
 Rules:
 - Department: E.g., Pediatrics, Gynecology, General Medicine, Surgery, Orthopedics, Cardiology, etc.
@@ -38,12 +37,25 @@ Respond in valid JSON format ONLY:
 }`;
 
   try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
+      },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: "application/json" },
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: "You are an expert medical AI assistant for Crest Care Hospital. Always respond in valid JSON format."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        response_format: { type: "json_object" }
       }),
     });
 
@@ -54,7 +66,7 @@ Respond in valid JSON format ONLY:
     }
 
     const data = await res.json();
-    const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    const textContent = data.choices?.[0]?.message?.content;
     
     if (textContent) {
       const parsed = JSON.parse(textContent);
