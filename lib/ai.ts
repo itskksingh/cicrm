@@ -4,6 +4,7 @@ export type AIAnalysisResult = {
   department: string;
   problem: string;
   priority: Priority;
+  autoReply?: string;
 };
 
 export async function analyzeLeadMessage(text: string): Promise<AIAnalysisResult> {
@@ -20,12 +21,15 @@ export async function analyzeLeadMessage(text: string): Promise<AIAnalysisResult
   const prompt = `Analyze the following patient message and extract the appropriate medical department, a concise problem summary, and priority level.
 
 Rules:
-- Department: E.g., Pediatrics, Gynecology, General Medicine, Surgery, Orthopedics, Cardiology, etc.
-- Problem: Short summary in English (e.g., "Baby fever for 3 days", "Period delayed by 4 days").
+- Department: E.g., Pediatrics, Gynecology, General Medicine, Surgery, Orthopedics, Cardiology, Gastroenterology, etc.
+- Problem: Short summary in English (e.g., "Severe abdominal pain, needs endoscopy").
 - Priority: 
   * HOT (bleeding, severe pain, surgery intent, emergencies)
   * WARM (consultation, mild symptoms, follow-ups)
   * COLD (general inquiry, timing, address requests)
+- AutoReply: A conversational, empathetic reply in Hinglish (Hindi written in English alphabet) to send immediately to the patient. Acknowledge their problem. If they mention specific treatments like Endoscopy, Ultrasound, Surgery etc, mention that it is available here and ask if they want to book an appointment.
+  Example for Endoscopy: "Ji, hamare yaha endoscopy hota hai. Dr. Sushil roj endoscopy karte hain. Kya main aapka appointment book kar du?"
+  Example for Fever: "Aapke bacche ke bukhar ke baare mein sunkar bura laga. Humare yaha ache pediatricians hain, kya main appointment fix kar du?"
 
 Patient message: "${text}"
 
@@ -33,7 +37,8 @@ Respond in valid JSON format ONLY:
 {
   "department": "Department Name",
   "problem": "Concise Problem Summary",
-  "priority": "HOT" | "WARM" | "COLD"
+  "priority": "HOT" | "WARM" | "COLD",
+  "autoReply": "Conversational Hinglish reply"
 }`;
 
   try {
@@ -74,6 +79,7 @@ Respond in valid JSON format ONLY:
         department: parsed.department || "General",
         problem: parsed.problem || text,
         priority: (parsed.priority as Priority) || Priority.COLD,
+        autoReply: parsed.autoReply,
       };
     }
   } catch (error) {

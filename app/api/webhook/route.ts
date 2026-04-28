@@ -91,6 +91,7 @@ export async function POST(req: Request) {
               let department = "General";
               let problemText = text;
               let priority: Priority = Priority.COLD;
+              let replyText = AUTO_REPLY_TEXT;
 
               if (!existingLead) {
                 // First message from this user: run AI to extract problem/department/priority
@@ -98,6 +99,9 @@ export async function POST(req: Request) {
                 department = analysis.department;
                 problemText = analysis.problem;
                 priority = analysis.priority;
+                if (analysis.autoReply) {
+                  replyText = analysis.autoReply;
+                }
               } else {
                 // For subsequent messages, keep the established priority
                 priority = existingLead.priority;
@@ -121,13 +125,14 @@ export async function POST(req: Request) {
 
               // Step 3: Send auto-reply (errors caught safely — webhook stays alive)
               try {
-                await sendWhatsAppReply(phone, AUTO_REPLY_TEXT);
+                // Only send auto-reply if we have text to send (we don't want to spam existing leads ideally, but keeping current behavior)
+                await sendWhatsAppReply(phone, replyText);
 
                 // Step 4: Save the bot reply in DB so it shows in chat
                 await saveMessage({
                   leadId: lead.id,
                   sender: Sender.BOT,
-                  content: AUTO_REPLY_TEXT,
+                  content: replyText,
                 });
               } catch (replyError) {
                 // Never crash the webhook — Meta must always receive 200
