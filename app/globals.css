@@ -1,26 +1,136 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* 1. Colors & Surface Logic (from design.md) */
+  --color-surface-base: #F8FAFC;   /* Neutral Base */
+  --color-surface-card: #FFFFFF;   /* Level 2 Cards */
+  --color-surface-hover: #F1F5F9;  /* Level 3 Interactive */
+  
+  --color-on-surface: #1E293B;     /* Never use pure black */
+  
+  --color-primary: #005FB8;        /* Clinical Blue */
+  --color-primary-container: #DBEAFE;
+  
+  --color-status-hot: #EF4444;     /* Urgent Crimson */
+  --color-status-warm: #F59E0B;    /* Amber */
+  --color-status-cold: #3B82F6;    /* Bright Stable Blue */
+  
+  /* 2. Fluid Typography Scales */
+  --fluid-h1: clamp(2rem, 5vw, 3.5rem);
+  --fluid-h2: clamp(1.5rem, 4vw, 2.5rem);
+  --fluid-body: clamp(0.875rem, 1.5vw, 1.125rem);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* Map variables to Tailwind tokens using v4 syntax */
+@theme {
+  --color-surface: var(--color-surface-base);
+  --color-card: var(--color-surface-card);
+  --color-surface-hover: var(--color-surface-hover);
+  --color-content: var(--color-on-surface);
+  
+  --color-primary: var(--color-primary);
+  --color-primary-container: var(--color-primary-container);
+  
+  --color-hot: var(--color-status-hot);
+  --color-warm: var(--color-status-warm);
+  --color-cold: var(--color-status-cold);
+
+  --font-sans: var(--font-inter), sans-serif;
+
+  /* Login page specific colors */
+  --color-primary-fixed: #d6e3ff;
+  --color-on-surface-variant: #424752;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f2f4f6;
+  --color-surface-container-high: #e6e8ea;
+  --color-outline: #727783;
+  --color-outline-variant: #c2c6d4;
+  --color-on-primary: #ffffff;
+  --color-surface-variant: #e0e3e5;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+@utility login-gradient {
+  background: linear-gradient(135deg, #00488d 0%, #005fb8 100%);
 }
 
+@utility bg-blob {
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(214, 227, 255, 0.4) 0%, rgba(247, 249, 251, 0) 70%);
+  z-index: -1;
+  filter: blur(40px);
+}
+
+@utility ambient-shadow {
+  box-shadow: 0 24px 48px -12px rgba(25, 28, 30, 0.06);
+}
+
+
+/* 3. DRY Custom Utilities for v4 */
+@utility flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@utility flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+@utility glass-panel {
+  background: color-mix(in srgb, var(--color-surface-card) 85%, transparent);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+@utility shadow-ambient {
+  /* 24px-32px blur, very low opacity tinted with on-surface per design.md */
+  box-shadow: 0 16px 32px -8px color-mix(in srgb, var(--color-on-surface) 6%, transparent);
+}
+
+@utility ghost-border {
+  border: 1px solid color-mix(in srgb, var(--color-on-surface) 15%, transparent);
+}
+
+/* 4. Typographic Components (Responsive & Accessible) */
+@utility heading-main {
+  font-size: var(--fluid-h1);
+  font-weight: 700;
+  letter-spacing: -0.02em; /* Tighter letter spacing for authoritative feel */
+  line-height: 1.1;
+  color: var(--color-on-surface);
+}
+
+@utility heading-secondary {
+  font-size: var(--fluid-h2);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  color: var(--color-on-surface);
+}
+
+@utility text-body {
+  font-size: var(--fluid-body);
+  line-height: 1.6;
+  max-width: 65ch; /* Enforce line length limit */
+  color: color-mix(in srgb, var(--color-on-surface) 90%, transparent);
+}
+
+@utility text-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: color-mix(in srgb, var(--color-on-surface) 60%, transparent);
+}
+
+/* Global Reset */
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-surface-base);
+  color: var(--color-on-surface);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }

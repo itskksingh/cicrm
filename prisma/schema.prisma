@@ -1,0 +1,108 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+/// Hospital staff member who uses the CRM dashboard
+model Staff {
+  id         String    @id @default(uuid())
+  name       String
+  phone      String    @unique
+  email      String?   @unique
+  role       Role      @default(CALLER)
+  department String
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  callLogs   CallLog[]
+  leads      Lead[]    @relation("AssignedLeads")
+
+  @@map("staff")
+}
+
+/// A patient lead generated from WhatsApp/Facebook Ads
+model Lead {
+  id           String     @id @default(uuid())
+  name         String?
+  phone        String
+  age          Int?
+  problem      String
+  department   String
+  priority     Priority   @default(COLD)
+  status       LeadStatus @default(NEW)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  notes        String?
+  aiSummary    String?
+  aiConfidence Float?
+  lastMessageAt DateTime   @default(now())
+  lastCallAt    DateTime?
+  callAttempts  Int        @default(0)
+  assignedToId String?
+  callLogs     CallLog[]
+  assignedTo   Staff?     @relation("AssignedLeads", fields: [assignedToId], references: [id])
+  messages     Message[]
+
+  @@map("leads")
+}
+
+/// A single message in the WhatsApp chat history for a lead
+model Message {
+  id        String   @id @default(uuid())
+  content   String
+  sender    Sender
+  timestamp DateTime @default(now())
+  isRead    Boolean  @default(false)
+  leadId    String
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
+
+/// A log entry for every call made to a patient
+model CallLog {
+  id        String      @id @default(uuid())
+  duration  Int
+  outcome   CallOutcome
+  notes     String?
+  createdAt DateTime    @default(now())
+  leadId    String
+  staffId   String
+  lead      Lead        @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  staff     Staff       @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@map("call_logs")
+}
+
+enum Role {
+  ADMIN
+  CALLER
+}
+
+enum Priority {
+  HOT
+  WARM
+  COLD
+}
+
+enum LeadStatus {
+  NEW
+  ASSIGNED
+  CLOSED
+}
+
+enum Sender {
+  USER
+  BOT
+  STAFF
+}
+
+enum CallOutcome {
+  CONVERTED
+  FOLLOW_UP
+  NOT_INTERESTED
+}

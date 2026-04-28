@@ -89,3 +89,35 @@ If contrast testing requires a boundary, use a **Ghost Border**: `outline-varian
 - **Don't** use pure black (#000000) for text. Always use `on-surface` to maintain a premium, soft-contrast feel.
 - **Don't** use standard "drop shadows." If a card doesn't have a shadow, its depth must be defined by its background color difference.
 - **Don't** use icons without labels in the main navigation. In a hospital setting, clarity is more important than minimalism.
+
+## 10. Authentication UI
+
+Login Screen:
+- Centered layout
+- Large inputs
+- Minimal distractions
+
+Buttons:
+- Primary gradient button
+- Full width
+
+---
+
+Staff Dashboard Entry:
+- Welcome message
+- Role display
+- Quick stats cards
+
+---
+
+Staff Management:
+- Clean list view
+- Simple forms
+- Modal-based creation
+
+---
+
+UX Priority:
+- Fast login
+- No friction
+- Immediate action access
