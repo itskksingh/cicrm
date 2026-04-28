@@ -4,7 +4,7 @@ import { Video, MoreVertical, Paperclip, Send, Phone, UserPlus, Flame, Snowflake
 import {  format } from 'date-fns';
 
 export default function ChatWindow() {
-  const { selectedLead: lead, messages, loadingMessages } = useChat();
+  const { selectedLead: lead, messages, loadingMessages, sendMessage } = useChat();
   const [inputText, setInputText] = useState("");
 
   if (!lead) {
@@ -18,9 +18,7 @@ export default function ChatWindow() {
   const handleSend = async () => {
     if (!inputText.trim()) return;
     try {
-      // Create message via an API route (for now just clear the text as we only show receiving messages in instructions)
-      // wait, the USER only requested: "When a user sends WhatsApp message: -> Lead appears in CRM -> Message visible in chat -> Ready for staff to call"
-      // They did not request sending messages from staff yet, but we'll clear the box just in case
+      await sendMessage(inputText);
       setInputText("");
     } catch (err) {
       console.error(err);

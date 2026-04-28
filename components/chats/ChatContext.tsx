@@ -11,6 +11,7 @@ interface ChatContextValue {
   selectedLead: Lead | null;
   messages: Message[];
   loadingMessages: boolean;
+  sendMessage: (content: string) => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextValue | undefined>(undefined);
@@ -19,7 +20,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const { leads, loading: loadingLeads } = useLeads();
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   
-  const { messages, loading: loadingMessages } = useMessages(selectedLeadId);
+  const { messages, loading: loadingMessages, sendMessage } = useMessages(selectedLeadId);
 
   const selectedLead = leads.find((l) => l.id === selectedLeadId) || null;
 
@@ -33,6 +34,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         selectedLead,
         messages,
         loadingMessages,
+        sendMessage,
       }}
     >
       {children}

@@ -6,12 +6,17 @@ import { Phone, Plus, Mic, Send, Sparkles, Home, MessageSquare, Users, BarChart2
 import { formatDistanceToNow, format } from 'date-fns';
 
 export default function MobileChatPage() {
-  const { leads, loadingLeads, selectedLeadId, setSelectedLeadId, selectedLead, messages, loadingMessages } = useChat();
+  const { leads, loadingLeads, selectedLeadId, setSelectedLeadId, selectedLead, messages, loadingMessages, sendMessage } = useChat();
   const [inputText, setInputText] = useState("");
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!inputText.trim()) return;
-    setInputText("");
+    try {
+      await sendMessage(inputText);
+      setInputText("");
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   // If no lead is selected, show the list
