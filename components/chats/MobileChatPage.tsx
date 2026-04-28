@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useChat } from './ChatContext';
 import { Phone, Plus, Mic, Send, Sparkles, Home, MessageSquare, Users, BarChart2, Settings, ArrowLeft } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
@@ -8,14 +8,39 @@ import { formatDistanceToNow, format } from 'date-fns';
 export default function MobileChatPage() {
   const { leads, loadingLeads, selectedLeadId, setSelectedLeadId, selectedLead, messages, loadingMessages, sendMessage } = useChat();
   const [inputText, setInputText] = useState("");
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const prevMessagesLength = useRef(messages.length);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const isInitialLoad = prevMessagesLength.current === 0 && messages.length > 0;
+    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
+    const userSentMessage = messages.length > prevMessagesLength.current && messages[messages.length - 1]?.sender === 'STAFF';
+
+    if (isInitialLoad || isNearBottom || userSentMessage) {
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 50);
+    }
+
+    prevMessagesLength.current = messages.length;
+  }, [messages]);
 
   const handleSend = async () => {
     if (!inputText.trim()) return;
+    const textToSend = inputText;
+    
+    // Optimistically clear input instantly
+    setInputText("");
+
     try {
-      await sendMessage(inputText);
-      setInputText("");
+      await sendMessage(textToSend);
     } catch (err) {
       console.error(err);
+      setInputText(textToSend); // Restore on error
     }
   };
 
@@ -93,7 +118,7 @@ export default function MobileChatPage() {
       </div>
 
       {/* Chat Body */}
-      <div className="flex-1 overflow-y-auto px-4 py-2 space-y-6 flex flex-col pb-24">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 py-2 space-y-6 flex flex-col pb-24">
         {loadingMessages ? (
           <div className="text-center text-[#94A3B8]">Loading messages...</div>
         ) : messages.length === 0 ? (
@@ -122,6 +147,7 @@ export default function MobileChatPage() {
             );
           })
         )}
+        <div ref={messagesEndRef} />
       </div>
 
       {/* Input + Call Floating Section */}

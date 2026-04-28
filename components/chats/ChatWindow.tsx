@@ -1,11 +1,32 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useChat } from './ChatContext';
-import { Video, MoreVertical, Paperclip, Send, Phone, UserPlus, Flame, Snowflake } from 'lucide-react';
+import { Video, MoreVertical, Paperclip, Send, UserPlus, Flame, Snowflake } from 'lucide-react';
 import {  format } from 'date-fns';
 
 export default function ChatWindow() {
   const { selectedLead: lead, messages, loadingMessages, sendMessage } = useChat();
   const [inputText, setInputText] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const prevMessagesLength = useRef(messages.length);
+
+  React.useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const isInitialLoad = prevMessagesLength.current === 0 && messages.length > 0;
+    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
+    const userSentMessage = messages.length > prevMessagesLength.current && messages[messages.length - 1]?.sender === 'STAFF';
+
+    if (isInitialLoad || isNearBottom || userSentMessage) {
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 50);
+    }
+
+    prevMessagesLength.current = messages.length;
+  }, [messages]);
 
   if (!lead) {
     return (
@@ -17,11 +38,34 @@ export default function ChatWindow() {
 
   const handleSend = async () => {
     if (!inputText.trim()) return;
+    const textToSend = inputText;
+    
+    // Optimistically clear input instantly
+    setInputText("");
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto'; // Reset height
+    }
+
     try {
-      await sendMessage(inputText);
-      setInputText("");
+      await sendMessage(textToSend);
     } catch (err) {
       console.error(err);
+      setInputText(textToSend); // Restore on error
+    }
+  };
+
+  const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInputText(e.target.value);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 128)}px`;
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
     }
   };
 
@@ -49,34 +93,35 @@ export default function ChatWindow() {
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#FAFAFA]">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#FAFAFA]">
         {loadingMessages ? (
           <div className="flex justify-center text-[#94A3B8]">Loading messages...</div>
         ) : messages.length === 0 ? (
           <div className="flex justify-center text-[#94A3B8]">No messages yet.</div>
         ) : (
           messages.map((msg) => {
-            const isUser = msg.sender === 'USER';
+            const isCustomer = msg.sender === 'USER';
             return (
-              <div key={msg.id} className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
+              <div key={msg.id} className={`flex flex-col ${isCustomer ? 'items-start' : 'items-end'}`}>
                 <div 
                   className={`max-w-[80%] rounded-2xl p-4 ${
-                    isUser 
-                      ? 'bg-[#0F52BA] text-white rounded-tr-sm' 
+                    isCustomer 
+                      ? 'bg-white border border-[#E2E8F0] shadow-sm text-[#1E293B] rounded-tl-sm'
                       : msg.sender === 'BOT' 
-                        ? 'bg-[#E2E8F0] text-[#1E293B] rounded-tl-sm'
-                        : 'bg-white border border-[#E2E8F0] shadow-sm text-[#1E293B] rounded-tl-sm'
+                        ? 'bg-[#E2E8F0] text-[#1E293B] rounded-tr-sm'
+                        : 'bg-[#0F52BA] text-white rounded-tr-sm'
                   }`}
                 >
                   <p className="text-[15px] leading-relaxed">{msg.content}</p>
                 </div>
                 <span className="text-xs text-[#94A3B8] mt-2 px-1 font-medium">
-                  {msg.sender === 'BOT' ? 'Bot' : msg.sender === 'USER' ? 'User' : 'Staff'} • {format(new Date(msg.timestamp), 'hh:mm a')}
+                  {msg.sender === 'BOT' ? 'Bot' : isCustomer ? 'User' : 'Staff'} • {format(new Date(msg.timestamp), 'hh:mm a')}
                 </span>
               </div>
             );
           })
         )}
+        <div ref={messagesEndRef} />
       </div>
 
       {/* Input Area */}
@@ -99,25 +144,33 @@ export default function ChatWindow() {
 
         {/* Input Field */}
         <div className="flex items-end gap-3">
-          <div className="flex-1 relative bg-[#F8FAFC] rounded-xl border border-[#E2E8F0] hover:border-[#CBD5E1] transition-colors overflow-hidden flex items-center pr-3">
-            <textarea 
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              placeholder="Type your response..."
-              className="w-full bg-transparent p-4 min-h-[56px] max-h-32 text-sm text-[#0F172A] placeholder-[#94A3B8] focus:outline-none resize-none"
-              rows={1}
-            ></textarea>
-            <button className="text-[#94A3B8] hover:text-[#475569] p-2 transition-colors">
+          <div className="flex-1 relative bg-[#F8FAFC] rounded-2xl border border-[#E2E8F0] focus-within:border-[#0F52BA] transition-colors flex items-end p-2 shadow-sm">
+            <button className="text-[#94A3B8] hover:text-[#475569] p-2 shrink-0 transition-colors">
               <Paperclip className="w-5 h-5" />
             </button>
+            
+            <textarea 
+              ref={textareaRef}
+              value={inputText}
+              onChange={handleInput}
+              onKeyDown={handleKeyDown}
+              placeholder="Type your response..."
+              className="flex-1 bg-transparent px-2 py-2 min-h-[40px] max-h-32 text-sm text-[#0F172A] placeholder-[#94A3B8] focus:outline-none resize-none overflow-y-auto self-center"
+              rows={1}
+            ></textarea>
+            
+            <button 
+              onClick={handleSend} 
+              disabled={!inputText.trim()}
+              className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center transition-all ${
+                inputText.trim() 
+                  ? 'bg-[#0F52BA] hover:bg-[#0A3D8E] text-white shadow-md cursor-pointer' 
+                  : 'bg-transparent text-[#CBD5E1] cursor-not-allowed'
+              }`}
+            >
+              <Send className={`w-5 h-5 ${inputText.trim() ? 'ml-0.5' : ''}`} />
+            </button>
           </div>
-          
-          <button onClick={handleSend} className="w-14 h-14 lg:w-16 lg:h-16 bg-[#0F52BA] hover:bg-[#0A3D8E] text-white rounded-xl flex flex-col items-center justify-center transition-all shadow-md shrink-0 active:scale-95">
-            <Send className="w-5 h-5 lg:w-6 lg:h-6 ml-1" />
-          </button>
-          <button className="w-14 h-14 lg:w-16 lg:h-16 bg-linear-to-br from-[#0F52BA] to-[#0A3D8E] hover:from-[#0A3D8E] hover:to-[#0A3D8E] text-white rounded-xl flex items-center justify-center transition-all shrink-0 shadow-[0_4px_20px_0_rgba(15,82,186,0.45)] hover:shadow-[0_4px_25px_0_rgba(15,82,186,0.6)] active:scale-95">
-            <Phone className="w-6 h-6 lg:w-8 lg:h-8" fill="currentColor" />
-          </button>
         </div>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 export type Message = {
   id: string;
@@ -12,10 +12,23 @@ export type Message = {
 export function useMessages(leadId: string | null) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
+  const [currentLeadId, setCurrentLeadId] = useState(leadId);
+  const pendingMessages = useRef<Message[]>([]);
+
+  // Reset state when leadId changes during render to avoid cascading renders from effects
+  if (leadId !== currentLeadId) {
+    setCurrentLeadId(leadId);
+    setMessages([]);
+    pendingMessages.current = [];
+    if (leadId) {
+      setLoading(true);
+    } else {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (!leadId) {
-      setMessages([]);
       return;
     }
 
@@ -27,7 +40,8 @@ export function useMessages(leadId: string | null) {
         if (res.ok) {
           const data = await res.json();
           if (isMounted) {
-            setMessages(data);
+            // Merge server data with any messages still waiting to send
+            setMessages([...data, ...pendingMessages.current]);
           }
         }
       } catch (err) {
@@ -37,7 +51,6 @@ export function useMessages(leadId: string | null) {
       }
     };
 
-    setLoading(true);
     fetchMessages();
 
     // Poll every 3 seconds
@@ -52,7 +65,7 @@ export function useMessages(leadId: string | null) {
   const sendMessage = useCallback(async (content: string) => {
     if (!leadId) return;
 
-    const tempId = Date.now().toString();
+    const tempId = `temp-${Date.now()}`;
     const newMessage: Message = {
       id: tempId,
       content,
@@ -62,6 +75,8 @@ export function useMessages(leadId: string | null) {
       leadId,
     };
 
+    // Optimistically track and display
+    pendingMessages.current.push(newMessage);
     setMessages((prev) => [...prev, newMessage]);
 
     try {
@@ -72,12 +87,18 @@ export function useMessages(leadId: string | null) {
       });
       if (res.ok) {
         const data = await res.json();
+        // Remove from pending
+        pendingMessages.current = pendingMessages.current.filter(m => m.id !== tempId);
+        // Replace temp message with server confirmed message
         setMessages((prev) => prev.map((msg) => (msg.id === tempId ? data : msg)));
       } else {
+        // Rollback on failure
+        pendingMessages.current = pendingMessages.current.filter(m => m.id !== tempId);
         setMessages((prev) => prev.filter((msg) => msg.id !== tempId));
       }
     } catch (err) {
       console.error('Failed to send message:', err);
+      pendingMessages.current = pendingMessages.current.filter(m => m.id !== tempId);
       setMessages((prev) => prev.filter((msg) => msg.id !== tempId));
     }
   }, [leadId]);
