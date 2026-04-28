@@ -13,10 +13,10 @@ export async function fetchKnowledgeAction() {
   }
 }
 
-export async function addKnowledgeAction(department: string, content: string) {
+export async function addKnowledgeAction(department: string, content: string, metadata?: Record<string, string>) {
   try {
     if (!department || !content) throw new Error("Department and content are required.");
-    await addKnowledgeChunk(department, content);
+    await addKnowledgeChunk(department, content, metadata);
     revalidatePath("/dashboard/knowledge");
     return { success: true };
   } catch (error: any) {

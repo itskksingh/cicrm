@@ -9,6 +9,17 @@ export type UnifiedAIResponse = {
   };
 };
 
+const DOCTOR_NAME_MAP: Record<string, string> = {
+  "Dr. Avijeet Prasad": "डॉ. अभिजीत प्रसाद",
+  "Dr. Sushil Kumar": "डॉ. सुशिल कुमार",
+  "Dr. Priyamvada": "डॉ. प्रियम्वदा",
+
+  // Common incorrect outputs to auto-correct
+  "डॉ. अविजीत प्रसाद": "डॉ. अभिजीत प्रसाद",
+  "डॉ. सुषिल कुमार": "डॉ. सुशिल कुमार",
+  "डॉ. प्रियाम्वदा": "डॉ. प्रियम्वदा"
+};
+
 export async function generateChatResponse(
   chatHistory: { role: "user" | "assistant"; content: string }[],
   currentMessage: string,
@@ -26,10 +37,18 @@ export async function generateChatResponse(
     content: msg.content
   }));
 
+  const doctorContext = `
+Doctors:
+- Dr. Avijeet Prasad (डॉ. अभिजीत प्रसाद)
+- Dr. Sushil Kumar (डॉ. सुशिल कुमार)
+- Dr. Priyamvada (डॉ. प्रियम्वदा)
+  `;
+
   const systemPrompt = `You are an empathetic medical AI assistant for Crest Care Hospital.
 Your ultimate goal is to assist patients and convert them into hospital visits/appointments.
 
 **HOSPITAL KNOWLEDGE BASE:**
+${doctorContext}
 ${hospitalContext || "No specific context available for this yet."}
 
 **RULES FOR REPLY:**
@@ -37,6 +56,8 @@ ${hospitalContext || "No specific context available for this yet."}
 2. Be empathetic, polite, and professional.
 3. Keep the reply short (1-3 sentences maximum) suitable for WhatsApp.
 4. If the user mentions a problem matching the knowledge base, tell them it's available and ask if you can book an appointment.
+5. Doctor names MUST NOT be translated or guessed. Always use exact spelling if provided in context.
+6. Only use information from the provided hospital knowledge base. Do NOT assume or hallucinate unknown details.
 
 **RULES FOR CLASSIFICATION:**
 If the user's latest message reveals *new* or *more specific* medical information (e.g., they initially said "hello" but now say "pet dard"), you must provide an updated classification.
@@ -70,7 +91,7 @@ Respond in valid JSON format ONLY:
           ...messages
         ],
         response_format: { type: "json_object" },
-        temperature: 0.7
+        temperature: 0.3
       }),
     });
 
@@ -82,9 +103,23 @@ Respond in valid JSON format ONLY:
     const textContent = data.choices?.[0]?.message?.content;
     
     if (textContent) {
-      const parsed = JSON.parse(textContent);
+      let parsed;
+      try {
+        parsed = JSON.parse(textContent);
+      } catch (err) {
+        console.error("JSON parse error:", err);
+        return { reply: "माफ़ करें, अभी मैं जवाब नहीं दे सकता।" };
+      }
+
+      let replyText = parsed.reply || "माफ़ करें, अभी मैं जवाब नहीं दे सकता।";
+
+      // Fix doctor name issues
+      Object.keys(DOCTOR_NAME_MAP).forEach((key) => {
+        replyText = replyText.replaceAll(key, DOCTOR_NAME_MAP[key]);
+      });
+
       return {
-        reply: parsed.reply || "माफ़ करें, अभी मैं जवाब नहीं दे सकता।",
+        reply: replyText,
         classification: parsed.classification ? {
           department: parsed.classification.department || "General",
           problem: parsed.classification.problem || currentMessage,

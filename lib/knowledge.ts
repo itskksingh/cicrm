@@ -25,11 +25,9 @@ export async function generateEmbedding(text: string): Promise<number[]> {
   return data.data[0].embedding;
 }
 
-export async function searchKnowledge(department: string, problem: string, limit = 3) {
-  const queryText = `Department: ${department}. Problem: ${problem}`;
-  
+export async function searchKnowledge(query: string, limit = 3) {
   try {
-    const queryEmbedding = await generateEmbedding(queryText);
+    const queryEmbedding = await generateEmbedding(query);
     
     // Convert the embedding array into a formatted string that Postgres pgvector accepts: "[0.1, 0.2, ...]"
     const embeddingString = `[${queryEmbedding.join(',')}]`;
@@ -52,23 +50,31 @@ export async function searchKnowledge(department: string, problem: string, limit
 }
 
 // Utility function to add hospital data to your vector DB
-export async function addKnowledgeChunk(department: string, content: string) {
-  const embedding = await generateEmbedding(content);
+export async function addKnowledgeChunk(department: string, content: string, metadata?: Record<string, string>) {
+  // Inject metadata into the text before embedding to boost semantic accuracy
+  let embedText = content;
+  if (metadata && Object.keys(metadata).length > 0) {
+    const metaString = Object.entries(metadata).map(([k, v]) => `${k}: ${v}`).join(", ");
+    embedText = `[Metadata: ${metaString}] \n\n ${content}`;
+  }
+
+  const embedding = await generateEmbedding(embedText);
   const embeddingString = `[${embedding.join(',')}]`;
+  const metadataJson = metadata ? JSON.stringify(metadata) : null;
   
   await prisma.$executeRaw`
-    INSERT INTO knowledge_chunks (id, department, content, embedding, "createdAt", "updatedAt")
-    VALUES (gen_random_uuid(), ${department}, ${content}, ${embeddingString}::vector, NOW(), NOW())
+    INSERT INTO knowledge_chunks (id, department, content, metadata, embedding, "createdAt", "updatedAt")
+    VALUES (gen_random_uuid(), ${department}, ${content}, ${metadataJson}::jsonb, ${embeddingString}::vector, NOW(), NOW())
   `;
 }
 
 // Get all knowledge chunks (without embeddings for UI display)
 export async function getKnowledgeChunks() {
   return prisma.$queryRaw`
-    SELECT id, department, content, "createdAt"
+    SELECT id, department, content, metadata, "createdAt"
     FROM knowledge_chunks
     ORDER BY "createdAt" DESC
-  ` as Promise<{ id: string; department: string; content: string; createdAt: Date }[]>;
+  ` as Promise<{ id: string; department: string; content: string; metadata: any; createdAt: Date }[]>;
 }
 
 // Delete a knowledge chunk

@@ -8,6 +8,7 @@ type Chunk = {
   id: string;
   department: string;
   content: string;
+  metadata?: any;
   createdAt: Date;
 };
 
@@ -17,6 +18,7 @@ export default function KnowledgeBasePage() {
   const [submitting, setSubmitting] = useState(false);
   const [department, setDepartment] = useState("");
   const [content, setContent] = useState("");
+  const [metadataJson, setMetadataJson] = useState("");
   const [error, setError] = useState("");
 
   const loadChunks = async () => {
@@ -40,10 +42,24 @@ export default function KnowledgeBasePage() {
     
     setSubmitting(true);
     setError("");
-    const res = await addKnowledgeAction(department, content);
+
+    let parsedMetadata = undefined;
+    if (metadataJson.trim()) {
+      try {
+        parsedMetadata = JSON.parse(metadataJson);
+      } catch (err) {
+        setError("Invalid JSON format in Metadata field. Please fix it and try again.");
+        setSubmitting(false);
+        return;
+      }
+    }
+
+    const res = await addKnowledgeAction(department, content, parsedMetadata);
+    
     if (res.success) {
       setDepartment("");
       setContent("");
+      setMetadataJson("");
       await loadChunks();
     } else {
       setError(res.error || "Failed to add chunk");
@@ -81,10 +97,10 @@ export default function KnowledgeBasePage() {
         </h2>
         <form onSubmit={handleAdd} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-600 mb-1">Department</label>
+            <label className="block text-sm font-medium text-slate-600 mb-1">Department / Category</label>
             <input 
               type="text" 
-              placeholder="e.g. Gastroenterology, Pediatrics, General"
+              placeholder="e.g. Gastroenterology, General Info, FAQs"
               className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               value={department}
               onChange={(e) => setDepartment(e.target.value)}
@@ -101,6 +117,19 @@ export default function KnowledgeBasePage() {
               required
             />
           </div>
+
+          {/* Raw JSON Metadata Section */}
+          <div>
+            <label className="block text-sm font-medium text-slate-600 mb-1">Metadata (Paste JSON here - Optional)</label>
+            <textarea 
+              placeholder='{\n  "type": "qa",\n  "intent": "billing"\n}'
+              className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-sm min-h-[150px]"
+              value={metadataJson}
+              onChange={(e) => setMetadataJson(e.target.value)}
+            />
+            <p className="text-xs text-slate-500 mt-1">Copy and paste the exact JSON format provided by ChatGPT here.</p>
+          </div>
+
           <button 
             type="submit" 
             disabled={submitting}
@@ -126,7 +155,7 @@ export default function KnowledgeBasePage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {chunks.map((chunk) => (
-              <div key={chunk.id} className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 relative group">
+              <div key={chunk.id} className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 relative group flex flex-col">
                 <div className="flex justify-between items-start mb-3">
                   <span className="px-3 py-1 bg-indigo-50 text-indigo-700 text-xs font-semibold rounded-full">
                     {chunk.department}
@@ -139,8 +168,18 @@ export default function KnowledgeBasePage() {
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
-                <p className="text-slate-600 text-sm whitespace-pre-wrap">{chunk.content}</p>
-                <div className="mt-4 text-xs text-slate-400 font-medium">
+                
+                <p className="text-slate-600 text-sm whitespace-pre-wrap flex-1">{chunk.content}</p>
+                
+                {chunk.metadata && Object.keys(chunk.metadata).length > 0 && (
+                  <div className="mt-3 p-2 bg-slate-50 rounded border border-slate-100">
+                    <pre className="text-[10px] text-slate-600 font-mono whitespace-pre-wrap break-words">
+                      {JSON.stringify(chunk.metadata, null, 2)}
+                    </pre>
+                  </div>
+                )}
+                
+                <div className="mt-3 text-xs text-slate-400 font-medium">
                   {new Date(chunk.createdAt).toLocaleDateString()}
                 </div>
               </div>

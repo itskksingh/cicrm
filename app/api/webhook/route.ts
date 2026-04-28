@@ -107,8 +107,10 @@ export async function POST(req: Request) {
                 }));
               }
 
-              // Fetch hospital context
-              const contextChunks = await searchKnowledge(department, problemText);
+              // Fetch hospital context using the user's exact message!
+              // This allows the AI to find answers to generic questions (like "What is your address?") 
+              // even if the department is not correctly classified yet.
+              const contextChunks = await searchKnowledge(text);
               const hospitalContext = contextChunks.map((c) => c.content).join("\n\n");
 
               // Generate AI response & continuous classification
