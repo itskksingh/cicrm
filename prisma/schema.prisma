@@ -1,11 +1,13 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
+  extensions = [vector]
 }
 
 /// Hospital staff member who uses the CRM dashboard
@@ -105,4 +107,16 @@ enum CallOutcome {
   CONVERTED
   FOLLOW_UP
   NOT_INTERESTED
+}
+
+/// A chunk of hospital knowledge used for AI RAG
+model KnowledgeChunk {
+  id         String   @id @default(uuid())
+  department String
+  content    String
+  embedding  Unsupported("vector(1536)")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("knowledge_chunks")
 }

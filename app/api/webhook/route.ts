@@ -3,7 +3,8 @@ import { createOrGetLead } from "@/lib/db/leads";
 import { saveMessage } from "@/lib/db/messages";
 import { Sender, Priority } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { analyzeLeadMessage } from "@/lib/ai";
+import { generateChatResponse } from "@/lib/ai";
+import { searchKnowledge } from "@/lib/knowledge";
 
 // ─── Auto-Reply Content ───────────────────────────────────────────────────────
 
@@ -88,33 +89,53 @@ export async function POST(req: Request) {
                 orderBy: { createdAt: "desc" },
               });
 
-              let department = "General";
-              let problemText = text;
-              let priority: Priority = Priority.COLD;
-              let replyText = AUTO_REPLY_TEXT;
+              let department = existingLead?.department || "General";
+              let problemText = existingLead?.problem || text;
+              let priority: Priority = existingLead?.priority || Priority.COLD;
 
-              if (!existingLead) {
-                // First message from this user: run AI to extract problem/department/priority
-                const analysis = await analyzeLeadMessage(text);
-                department = analysis.department;
-                problemText = analysis.problem;
-                priority = analysis.priority;
-                if (analysis.autoReply) {
-                  replyText = analysis.autoReply;
-                }
-              } else {
-                // For subsequent messages, keep the established priority
-                priority = existingLead.priority;
+              // Fetch chat history for context
+              let chatHistory: { role: "user" | "assistant"; content: string }[] = [];
+              if (existingLead) {
+                const pastMessages = await prisma.message.findMany({
+                  where: { leadId: existingLead.id },
+                  orderBy: { timestamp: "desc" },
+                  take: 6,
+                });
+                chatHistory = pastMessages.reverse().map((m) => ({
+                  role: m.sender === "USER" ? "user" : "assistant",
+                  content: m.content,
+                }));
+              }
+
+              // Fetch hospital context
+              const contextChunks = await searchKnowledge(department, problemText);
+              const hospitalContext = contextChunks.map((c) => c.content).join("\n\n");
+
+              // Generate AI response & continuous classification
+              const aiResult = await generateChatResponse(chatHistory, text, hospitalContext);
+
+              if (aiResult.classification) {
+                department = aiResult.classification.department;
+                problemText = aiResult.classification.problem;
+                priority = aiResult.classification.priority;
               }
 
               // Step 1: Create or update lead
-              const lead = await createOrGetLead({
+              let lead = await createOrGetLead({
                 phone,
                 name,
                 problem: problemText,
                 department,
                 priority,
               });
+
+              // If AI detected a new classification for an existing lead, update it explicitly
+              if (aiResult.classification && existingLead) {
+                lead = await prisma.lead.update({
+                  where: { id: lead.id },
+                  data: { department, problem: problemText, priority },
+                });
+              }
 
               // Step 2: Save incoming user message to DB
               await saveMessage({
@@ -123,19 +144,17 @@ export async function POST(req: Request) {
                 content: text,
               });
 
-              // Step 3: Send auto-reply (errors caught safely — webhook stays alive)
+              // Step 3: Send AI reply via WhatsApp
               try {
-                // Only send auto-reply if we have text to send (we don't want to spam existing leads ideally, but keeping current behavior)
-                await sendWhatsAppReply(phone, replyText);
+                await sendWhatsAppReply(phone, aiResult.reply);
 
-                // Step 4: Save the bot reply in DB so it shows in chat
+                // Step 4: Save the bot reply in DB
                 await saveMessage({
                   leadId: lead.id,
                   sender: Sender.BOT,
-                  content: replyText,
+                  content: aiResult.reply,
                 });
               } catch (replyError) {
-                // Never crash the webhook — Meta must always receive 200
                 console.error("Auto-reply failed:", replyError);
               }
             }

@@ -1,45 +1,60 @@
 import { Priority } from "@prisma/client";
 
-export type AIAnalysisResult = {
-  department: string;
-  problem: string;
-  priority: Priority;
-  autoReply?: string;
+export type UnifiedAIResponse = {
+  reply: string;
+  classification?: {
+    department: string;
+    problem: string;
+    priority: Priority;
+  };
 };
 
-export async function analyzeLeadMessage(text: string): Promise<AIAnalysisResult> {
+export async function generateChatResponse(
+  chatHistory: { role: "user" | "assistant"; content: string }[],
+  currentMessage: string,
+  hospitalContext: string
+): Promise<UnifiedAIResponse> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    console.warn("OPENAI_API_KEY is not set. Using fallback logic for lead analysis.");
-    return {
-      department: "General",
-      problem: text,
-      priority: Priority.COLD,
-    };
+    console.warn("OPENAI_API_KEY is not set.");
+    return { reply: "माफ़ करें, अभी मैं जवाब नहीं दे सकता।" };
   }
 
-  const prompt = `Analyze the following patient message and extract the appropriate medical department, a concise problem summary, and priority level.
+  // Format history for OpenAI
+  const messages = chatHistory.map(msg => ({
+    role: msg.role,
+    content: msg.content
+  }));
 
-Rules:
+  const systemPrompt = `You are an empathetic medical AI assistant for Crest Care Hospital.
+Your ultimate goal is to assist patients and convert them into hospital visits/appointments.
+
+**HOSPITAL KNOWLEDGE BASE:**
+${hospitalContext || "No specific context available for this yet."}
+
+**RULES FOR REPLY:**
+1. YOU MUST REPLY ONLY IN HINDI USING THE DEVANAGARI SCRIPT (e.g., "जी, हमारे यहाँ..."). Never use English alphabet for the reply.
+2. Be empathetic, polite, and professional.
+3. Keep the reply short (1-3 sentences maximum) suitable for WhatsApp.
+4. If the user mentions a problem matching the knowledge base, tell them it's available and ask if you can book an appointment.
+
+**RULES FOR CLASSIFICATION:**
+If the user's latest message reveals *new* or *more specific* medical information (e.g., they initially said "hello" but now say "pet dard"), you must provide an updated classification.
 - Department: E.g., Pediatrics, Gynecology, General Medicine, Surgery, Orthopedics, Cardiology, Gastroenterology, etc.
 - Problem: Short summary in English (e.g., "Severe abdominal pain, needs endoscopy").
-- Priority: 
-  * HOT (bleeding, severe pain, surgery intent, emergencies)
-  * WARM (consultation, mild symptoms, follow-ups)
-  * COLD (general inquiry, timing, address requests)
-- AutoReply: A conversational, empathetic reply in Hinglish (Hindi written in English alphabet) to send immediately to the patient. Acknowledge their problem. If they mention specific treatments like Endoscopy, Ultrasound, Surgery etc, mention that it is available here and ask if they want to book an appointment.
-  Example for Endoscopy: "Ji, hamare yaha endoscopy hota hai. Dr. Sushil roj endoscopy karte hain. Kya main aapka appointment book kar du?"
-  Example for Fever: "Aapke bacche ke bukhar ke baare mein sunkar bura laga. Humare yaha ache pediatricians hain, kya main appointment fix kar du?"
-
-Patient message: "${text}"
+- Priority: HOT (bleeding, severe pain, surgery intent), WARM (consultation, mild symptoms), COLD (general inquiry).
 
 Respond in valid JSON format ONLY:
 {
-  "department": "Department Name",
-  "problem": "Concise Problem Summary",
-  "priority": "HOT" | "WARM" | "COLD",
-  "autoReply": "Conversational Hinglish reply"
+  "reply": "देवनागरी हिंदी में आपका जवाब",
+  "classification": {
+    "department": "Department Name",
+    "problem": "Concise Problem Summary",
+    "priority": "HOT | WARM | COLD"
+  } // Only include classification if new medical information was revealed. Otherwise, omit it.
 }`;
+
+  messages.push({ role: "user", content: currentMessage });
 
   try {
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -51,23 +66,16 @@ Respond in valid JSON format ONLY:
       body: JSON.stringify({
         model: "gpt-4o-mini",
         messages: [
-          {
-            role: "system",
-            content: "You are an expert medical AI assistant for Crest Care Hospital. Always respond in valid JSON format."
-          },
-          {
-            role: "user",
-            content: prompt
-          }
+          { role: "system", content: systemPrompt },
+          ...messages
         ],
-        response_format: { type: "json_object" }
+        response_format: { type: "json_object" },
+        temperature: 0.7
       }),
     });
 
     if (!res.ok) {
-      const errorText = await res.text();
-      console.error("AI Request failed:", errorText);
-      throw new Error("AI request failed");
+      throw new Error(`AI request failed: ${await res.text()}`);
     }
 
     const data = await res.json();
@@ -76,20 +84,17 @@ Respond in valid JSON format ONLY:
     if (textContent) {
       const parsed = JSON.parse(textContent);
       return {
-        department: parsed.department || "General",
-        problem: parsed.problem || text,
-        priority: (parsed.priority as Priority) || Priority.COLD,
-        autoReply: parsed.autoReply,
+        reply: parsed.reply || "माफ़ करें, अभी मैं जवाब नहीं दे सकता।",
+        classification: parsed.classification ? {
+          department: parsed.classification.department || "General",
+          problem: parsed.classification.problem || currentMessage,
+          priority: (parsed.classification.priority as Priority) || Priority.COLD,
+        } : undefined
       };
     }
   } catch (error) {
-    console.error("Error analyzing lead message with AI:", error);
+    console.error("Error generating chat response:", error);
   }
 
-  // Fallback
-  return {
-    department: "General",
-    problem: text,
-    priority: Priority.COLD,
-  };
+  return { reply: "माफ़ करें, सर्वर में कुछ खराबी है।" };
 }
