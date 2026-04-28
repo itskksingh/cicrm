@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { createOrGetLead } from "@/lib/db/leads";
 import { saveMessage } from "@/lib/db/messages";
-import { Sender } from "@prisma/client";
+import { Sender, Priority } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
+import { analyzeLeadMessage } from "@/lib/ai";
 
 // ─── Auto-Reply Content ───────────────────────────────────────────────────────
 
@@ -80,12 +82,34 @@ export async function POST(req: Request) {
               const text = message.text.body;
               const name = contact?.profile?.name;
 
+              // Check if we already have an active lead for this phone
+              const existingLead = await prisma.lead.findFirst({
+                where: { phone, status: { not: "CLOSED" } },
+                orderBy: { createdAt: "desc" },
+              });
+
+              let department = "General";
+              let problemText = text;
+              let priority: Priority = Priority.COLD;
+
+              if (!existingLead) {
+                // First message from this user: run AI to extract problem/department/priority
+                const analysis = await analyzeLeadMessage(text);
+                department = analysis.department;
+                problemText = analysis.problem;
+                priority = analysis.priority;
+              } else {
+                // For subsequent messages, keep the established priority
+                priority = existingLead.priority;
+              }
+
               // Step 1: Create or update lead
               const lead = await createOrGetLead({
                 phone,
                 name,
-                problem: text,
-                department: "General",
+                problem: problemText,
+                department,
+                priority,
               });
 
               // Step 2: Save incoming user message to DB

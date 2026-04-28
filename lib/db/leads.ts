@@ -25,18 +25,7 @@ const PRIORITY_RANK: Record<Priority, number> = {
   [Priority.COLD]: 2,
 };
 
-// ─── Query Functions ──────────────────────────────────────────────────────────
 
-/**
- * Creates a new lead OR updates an existing open lead with the same phone.
- *
- * De-duplication logic:
- *  - If a lead with the same phone exists and is NOT CLOSED → update it
- *    with the latest problem, department, priority, and lastMessageAt.
- *  - Otherwise → create a new lead.
- *
- * HOT leads are auto-assigned status ASSIGNED for fast-track handling.
- */
 export async function createOrGetLead(data: CreateLeadInput) {
   const resolvedPriority = data.priority ?? Priority.COLD;
   const now = new Date();
@@ -57,8 +46,8 @@ export async function createOrGetLead(data: CreateLeadInput) {
       data: {
         name: data.name ?? existingLead.name,
         age: data.age ?? existingLead.age,
-        problem: data.problem,
-        department: data.department,
+        // problem and department are intentionally NOT updated here 
+        // to preserve the initial problem description and department assignment.
         priority: resolvedPriority,
         lastMessageAt: now,
         // HOT leads get fast-tracked to ASSIGNED automatically
@@ -88,10 +77,7 @@ export async function createOrGetLead(data: CreateLeadInput) {
   });
 }
 
-/**
- * Assigns a lead to a specific staff member (caller/admin).
- * Automatically updates the lead status to ASSIGNED.
- */
+
 export async function assignLead({ leadId, staffId }: AssignLeadInput) {
   return prisma.lead.update({
     where: { id: leadId },
@@ -105,12 +91,7 @@ export async function assignLead({ leadId, staffId }: AssignLeadInput) {
   });
 }
 
-/**
- * Fetches all leads sorted by priority (HOT → WARM → COLD),
- * then by latest lastMessageAt within the same priority tier.
- *
- * Also includes an unread message count for badge display.
- */
+
 export async function getLeadsByPriority() {
   const leads = await prisma.lead.findMany({
     include: {
@@ -146,9 +127,7 @@ export async function getLeadsByPriority() {
     });
 }
 
-/**
- * Updates a lead's conversion status (e.g., mark as CLOSED after conversion).
- */
+
 export async function updateLeadStatus(leadId: string, status: LeadStatus) {
   return prisma.lead.update({
     where: { id: leadId },

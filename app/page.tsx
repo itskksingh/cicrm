@@ -25,7 +25,7 @@ export default function Home() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col items-center justify-center px-6 z-10 w-full max-w-5xl mx-auto text-center mt-8 lg:mt-[-4rem]">
+      <main className="flex-1 flex flex-col items-center justify-center px-6 z-10 w-full max-w-5xl mx-auto text-center mt-8 lg:-mt-16">
         
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/5 border border-primary/10 mb-8">
           <Zap className="w-4 h-4 text-primary fill-primary/20" />

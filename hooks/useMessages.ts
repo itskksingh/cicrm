@@ -19,7 +19,6 @@ export function useMessages(leadId: string | null) {
   if (leadId !== currentLeadId) {
     setCurrentLeadId(leadId);
     setMessages([]);
-    pendingMessages.current = [];
     if (leadId) {
       setLoading(true);
     } else {
@@ -28,6 +27,8 @@ export function useMessages(leadId: string | null) {
   }
 
   useEffect(() => {
+    pendingMessages.current = [];
+
     if (!leadId) {
       return;
     }
