@@ -97,6 +97,24 @@ const isVoiceMessage = (msg: string) => {
   );
 };
 
+const isHospitalOpenQuery = (msg: string) => {
+  const t = msg.toLowerCase();
+  return (
+    t.includes("chalu hai") ||
+    t.includes("khula hai") ||
+    t.includes("band hai") ||
+    t.includes("open hai") ||
+    t.includes("closed") ||
+    t.includes("kab khulta") ||
+    t.includes("kab band") ||
+    t.includes("aaj open") ||
+    t.includes("sunday open") ||
+    t.includes("hospital timing") ||
+    (t.includes("hospital") && t.includes("time")) ||
+    (t.includes("hospital") && t.includes("kab"))
+  );
+};
+
 // ── Doctor Detector ──
 const detectDoctor = (msg: string): string | null => {
   const t = msg.toLowerCase();
@@ -176,6 +194,8 @@ export async function generateChatResponse(
     return { reply: "🙏 नमस्ते! कृपया अपनी समस्या text में लिखकर भेजें, हम आपकी जल्दी मदद करेंगे।" };
   if (isGreeting(currentMessage))
     return { reply: "🙏 नमस्ते! Crest Care Hospital में आपका स्वागत है।\nकृपया अपनी समस्या बताएं — हम आपकी मदद के लिए हमेशा तैयार हैं।" };
+  if (isHospitalOpenQuery(currentMessage))
+    return { reply: "✅ जी हाँ! Crest Care Hospital 24 घंटे, 7 दिन खुला रहता है।\nEmergency और Trauma सेवा हमेशा उपलब्ध है।\nसंपर्क: +91 92418 07380" };
   if (isEmergencyQuery(currentMessage)) return { reply: getEmergency() };
   if (isAddressQuery(currentMessage)) return { reply: getAddress() };
   if (doctorId && isScheduleQuery(currentMessage)) {
