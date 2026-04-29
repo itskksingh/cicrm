@@ -78,6 +78,25 @@ const isEmergencyQuery = (msg: string) => {
   );
 };
 
+const isGreeting = (msg: string) => {
+  const t = msg.trim().toLowerCase();
+  // Match messages that are ONLY a greeting (nothing else meaningful)
+  return /^(hi+|hello+|hey+|hlo+|helo+|namaste|namaskar|jai hind|good morning|good evening|good afternoon|g\.?m\.?|g\.?e\.?|hy|hii+|helo+|hlw)[\.!\s]*$/.test(t);
+};
+
+const isVoiceMessage = (msg: string) => {
+  const t = msg.toLowerCase();
+  // WhatsApp sends a transcription placeholder or specific text for audio
+  return (
+    t.includes("[audio]") ||
+    t.includes("[voice]") ||
+    t.includes("voice message") ||
+    t.includes("audio message") ||
+    t === "audio" ||
+    t === "voice"
+  );
+};
+
 // ── Doctor Detector ──
 const detectDoctor = (msg: string): string | null => {
   const t = msg.toLowerCase();
@@ -153,6 +172,10 @@ export async function generateChatResponse(
 
   // ── DETERMINISTIC INTERCEPT — runs before OpenAI, zero hallucination risk ──
   const doctorId = detectDoctor(currentMessage);
+  if (isVoiceMessage(currentMessage))
+    return { reply: "🙏 नमस्ते! कृपया अपनी समस्या text में लिखकर भेजें, हम आपकी जल्दी मदद करेंगे।" };
+  if (isGreeting(currentMessage))
+    return { reply: "🙏 नमस्ते! Crest Care Hospital में आपका स्वागत है।\nकृपया अपनी समस्या बताएं — हम आपकी मदद के लिए हमेशा तैयार हैं।" };
   if (isEmergencyQuery(currentMessage)) return { reply: getEmergency() };
   if (isAddressQuery(currentMessage)) return { reply: getAddress() };
   if (doctorId && isScheduleQuery(currentMessage)) {
@@ -203,103 +226,40 @@ CRITICAL RULE:
 - If unsure → ask user for more details
 `;
 
-  //   const systemPrompt = `You are an empathetic medical AI assistant for Crest Care Hospital.
-  // Your ultimate goal is to assist patients and convert them into hospital visits/appointments.
-
-  // **HOSPITAL KNOWLEDGE BASE:**
-  // ${doctorContext}
-  // ${hospitalContext || "No specific context available for this yet."}
-
-  // **RULES FOR REPLY:**
-  // 1. YOU MUST REPLY ONLY IN HINDI USING THE DEVANAGARI SCRIPT (e.g., "जी, हमारे यहाँ..."). Never use English alphabet for the reply.
-  // 2. Be empathetic, polite, and professional.
-  // 3. Keep the reply short (1-3 sentences maximum) suitable for WhatsApp.
-  // 4. If the user mentions a problem matching the knowledge base, tell them it's available and ask if you can book an appointment.
-  // 5. Doctor names MUST NOT be translated or guessed. Always use exact spelling if provided in context.
-  // 6. Only use information from the provided hospital knowledge base. Do NOT assume or hallucinate unknown details.
-
-  // **RULES FOR CLASSIFICATION:**
-  // If the user's latest message reveals *new* or *more specific* medical information, OR if they express intent to book/visit, you must provide an updated classification.
-  // - Department: E.g., Pediatrics, Gynecology, General Medicine, Surgery, Orthopedics, Cardiology, Gastroenterology, etc.
-  // - Problem: Short summary in English (e.g., "Severe abdominal pain, needs endoscopy").
-  // - Priority: HOT (bleeding, severe pain, surgery intent), WARM (consultation, mild symptoms), COLD (general inquiry).
-  // - Booking Intent:
-  //   * "booking_requested" (e.g., "book my appointment", "mujhe dikhana hai")
-  //   * "visit_confirmed" (e.g., "aa raha hu", "will visit today")
-  //   * "none" (if just asking questions)
-
-  // Respond in valid JSON format ONLY:
-  // {
-  //   "reply": "देवनागरी हिंदी में आपका जवाब",
-  //   "classification": {
-  //     "department": "Department Name",
-  //     "problem": "Concise Problem Summary",
-  //     "priority": "HOT | WARM | COLD",
-  //     "booking_intent": "none | booking_requested | visit_confirmed"
-  //   } // Only include classification if new medical information or booking intent was revealed. Otherwise, omit it.
-  // }`;
+  // (old prompt removed)
 
   const systemPrompt = `
-You are a medical assistant for Crest Care Hospital.
+You are a medical assistant for Crest Care Hospital. Help patients find the right doctor and encourage a hospital visit.
 
-Your role:
-- Help patients
-- Suggest correct doctor
-- Encourage hospital visit
-
------------------------------
-🔴 STRICT RULES (VERY IMPORTANT)
-
-1. ALWAYS reply in Hindi (Devanagari only)
-
-2. NEVER guess doctor
-→ Use ONLY doctor mapping provided
-
-3. NEVER generate:
-- doctor schedule
-- fees
-- hospital address
-(these are handled by backend)
-
-4. If condition is detected:
-→ assign correct doctor ONLY
-
-5. If condition unclear:
-→ ask follow-up question
-
-Example:
-"कृपया अपनी समस्या थोड़ा विस्तार से बताएं"
-
-6. If question is hospital-specific:
-→ answer ONLY from provided context
-
-7. If question is general health:
-→ give short simple answer (2 lines max)
-
------------------------------
-🧠 RESPONSE STYLE
-
-- Short (1–3 lines)
-- WhatsApp friendly
-- Polite and confident
-- Always end with conversion:
-
-"क्या मैं आपका अपॉइंटमेंट बुक कर दूँ?"
-
------------------------------
-🚨 SAFETY
-
-If information is not available:
-→ Say:
-
-"इस जानकारी के लिए कृपया अस्पताल से संपर्क करें"
-
-DO NOT GUESS.
-
------------------------------
-HOSPITAL CONTEXT:
 ${doctorContext}
-${hospitalContext}
+
+HOSPITAL RAG CONTEXT:
+${hospitalContext || ""}
+
+-----------------------------
+🔴 STRICT RULES
+
+1. ALWAYS reply in Hindi (Devanagari only). NEVER use English letters in the reply.
+2. NEVER guess doctor — use ONLY the doctor mapping above.
+3. NEVER generate schedule, fees, or hospital address (handled by backend).
+4. If condition detected → assign correct doctor only.
+5. If condition unclear → ask: "कृपया अपनी समस्या थोड़ा विस्तार से बताएं"
+6. Reply must be short: 1–3 lines, WhatsApp-friendly.
+7. End every reply with: "क्या मैं आपका अपॉइंटमेंट बुक कर दूँ?"
+8. If info not available → say: "इस जानकारी के लिए कृपया अस्पताल से संपर्क करें: +91 92418 07380"
+
+-----------------------------
+RESPOND IN JSON FORMAT ONLY:
+{
+  "reply": "हिंदी में जवाब",
+  "classification": {
+    "department": "Department name",
+    "problem": "Brief English summary",
+    "priority": "HOT | WARM | COLD",
+    "booking_intent": "none | booking_requested | visit_confirmed"
+  }
+}
+Only include classification if new medical info or booking intent was revealed. Otherwise omit it.
 `;
   messages.push({ role: "user", content: currentMessage });
 
