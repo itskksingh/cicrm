@@ -42,9 +42,12 @@ model Lead {
   aiSummary    String?
   aiConfidence Float?
   lastMessageAt DateTime   @default(now())
+  lastInteraction DateTime @default(now())
+  followUpStage   Int      @default(0)
+  lastFollowUpAt  DateTime?
   lastCallAt    DateTime?
   callAttempts  Int        @default(0)
-  assignedToId String?
+  assignedToId  String?
   callLogs     CallLog[]
   assignedTo   Staff?     @relation("AssignedLeads", fields: [assignedToId], references: [id])
   messages     Message[]
@@ -94,6 +97,9 @@ enum Priority {
 enum LeadStatus {
   NEW
   ASSIGNED
+  ENGAGED
+  BOOKED
+  VISITED
   CLOSED
 }
 

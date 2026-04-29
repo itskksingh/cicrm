@@ -1,0 +1,184 @@
+export const CONDITION_ENGINE = [
+  // ===============================
+  // 🟢 GENERAL MEDICINE
+  // ===============================
+  {
+    group: "general_medicine",
+    department: "General Medicine",
+    doctor: "AUTO",
+    conditions: [
+      {
+        name: "fever_infection",
+        keywords: [
+          "bukhar", "fever", "viral", "infection", "sardi", "khansi",
+          "body pain", "thakan", "kamjori", "jukaam", "gala dard"
+        ],
+        priority: "COLD"
+      },
+      {
+        name: "diabetes_bp",
+        keywords: [
+          "sugar", "diabetes", "bp", "blood pressure", "thyroid",
+          "cholesterol", "sugar badh gaya"
+        ],
+        priority: "WARM"
+      }
+    ],
+    routing: {
+      doctor: "डॉ. अजय कुमार",
+      opd_days: ["Thursday", "Sunday"],
+      time: "1 PM - 5 PM"
+    }
+  },
+
+  // ===============================
+  // 🟡 GASTRO + SURGERY
+  // ===============================
+  {
+    group: "gastro_surgery",
+    department: "Surgery",
+    doctor: "डॉ. सुशिल कुमार",
+    conditions: [
+      {
+        name: "stomach_problem",
+        keywords: [
+          "pet dard", "gas", "acidity", "ulcer", "pet me jalan",
+          "pet phoolna", "vomiting", "ulti"
+        ],
+        priority: "WARM"
+      },
+      {
+        name: "piles_fissure",
+        keywords: [
+          "bawasir", "piles", "fissure", "fistula",
+          "mal me dard", "bleeding stool"
+        ],
+        priority: "WARM"
+      },
+      {
+        name: "appendix",
+        keywords: [
+          "appendix", "pet ke niche dard", "sujan pet me"
+        ],
+        priority: "HOT"
+      }
+    ],
+    routing: {
+      doctor: "डॉ. सुशिल कुमार",
+      opd_days: ["Daily"],
+      time: "10 AM - 4 PM"
+    }
+  },
+
+  // ===============================
+  // 🔵 UROLOGY
+  // ===============================
+  {
+    group: "urology",
+    department: "Urology",
+    doctor: "डॉ. श्रवण कुमार",
+    conditions: [
+      {
+        name: "kidney_stone",
+        keywords: [
+          "pathri", "stone", "kidney stone",
+          "peshab me dard", "peshab ruk raha"
+        ],
+        priority: "HOT"
+      },
+      {
+        name: "urine_problem",
+        keywords: [
+          "peshab me jalan", "bar bar peshab",
+          "urine infection", "peshab problem"
+        ],
+        priority: "WARM"
+      }
+    ],
+    routing: {
+      doctor: "डॉ. श्रवण कुमार",
+      opd_days: ["Friday"],
+      time: "10 AM - 4 PM"
+    }
+  },
+
+  // ===============================
+  // 🟣 GYNECOLOGY
+  // ===============================
+  {
+    group: "gynecology",
+    department: "Gynecology",
+    doctor: "डॉ. प्रियम्वदा",
+    conditions: [
+      {
+        name: "pregnancy",
+        keywords: [
+          "pregnancy", "garbh", "delivery",
+          "pet me baccha", "ladies problem"
+        ],
+        priority: "WARM"
+      },
+      {
+        name: "period_problem",
+        keywords: [
+          "period", "mahina", "irregular",
+          "zyada bleeding", "white discharge"
+        ],
+        priority: "WARM"
+      }
+    ],
+    routing: {
+      doctor: "डॉ. प्रियम्वदा",
+      opd_days: ["Daily"],
+      time: "10 AM - 5 PM"
+    }
+  },
+
+  // ===============================
+  // 🔴 CARDIOLOGY
+  // ===============================
+  {
+    group: "cardiology",
+    department: "Cardiology",
+    doctor: "डॉ. रोहित कुमार",
+    conditions: [
+      {
+        name: "heart_problem",
+        keywords: [
+          "chest pain", "seene me dard",
+          "dhadkan tez", "heart problem", "bp high"
+        ],
+        priority: "HOT"
+      }
+    ],
+    routing: {
+      doctor: "डॉ. रोहित कुमार",
+      opd_days: ["3rd Saturday"],
+      time: "10 AM - 1 PM"
+    }
+  },
+
+  // ===============================
+  // 🟠 PEDIATRICS
+  // ===============================
+  {
+    group: "pediatrics",
+    department: "Child Care",
+    doctor: "डॉ. राकेश रंजन",
+    conditions: [
+      {
+        name: "child_fever",
+        keywords: [
+          "baccha bukhar", "baby fever",
+          "baccha ro raha", "baby problem"
+        ],
+        priority: "WARM"
+      }
+    ],
+    routing: {
+      doctor: "डॉ. राकेश रंजन",
+      opd_days: ["Thursday", "Sunday"],
+      time: "11 AM - 4 PM"
+    }
+  }
+];

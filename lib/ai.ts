@@ -6,6 +6,7 @@ export type UnifiedAIResponse = {
     department: string;
     problem: string;
     priority: Priority;
+    booking_intent: "none" | "booking_requested" | "visit_confirmed";
   };
 };
 
@@ -60,10 +61,14 @@ ${hospitalContext || "No specific context available for this yet."}
 6. Only use information from the provided hospital knowledge base. Do NOT assume or hallucinate unknown details.
 
 **RULES FOR CLASSIFICATION:**
-If the user's latest message reveals *new* or *more specific* medical information (e.g., they initially said "hello" but now say "pet dard"), you must provide an updated classification.
+If the user's latest message reveals *new* or *more specific* medical information, OR if they express intent to book/visit, you must provide an updated classification.
 - Department: E.g., Pediatrics, Gynecology, General Medicine, Surgery, Orthopedics, Cardiology, Gastroenterology, etc.
 - Problem: Short summary in English (e.g., "Severe abdominal pain, needs endoscopy").
 - Priority: HOT (bleeding, severe pain, surgery intent), WARM (consultation, mild symptoms), COLD (general inquiry).
+- Booking Intent:
+  * "booking_requested" (e.g., "book my appointment", "mujhe dikhana hai")
+  * "visit_confirmed" (e.g., "aa raha hu", "will visit today")
+  * "none" (if just asking questions)
 
 Respond in valid JSON format ONLY:
 {
@@ -71,8 +76,9 @@ Respond in valid JSON format ONLY:
   "classification": {
     "department": "Department Name",
     "problem": "Concise Problem Summary",
-    "priority": "HOT | WARM | COLD"
-  } // Only include classification if new medical information was revealed. Otherwise, omit it.
+    "priority": "HOT | WARM | COLD",
+    "booking_intent": "none | booking_requested | visit_confirmed"
+  } // Only include classification if new medical information or booking intent was revealed. Otherwise, omit it.
 }`;
 
   messages.push({ role: "user", content: currentMessage });
@@ -124,6 +130,7 @@ Respond in valid JSON format ONLY:
           department: parsed.classification.department || "General",
           problem: parsed.classification.problem || currentMessage,
           priority: (parsed.classification.priority as Priority) || Priority.COLD,
+          booking_intent: parsed.classification.booking_intent || "none"
         } : undefined
       };
     }

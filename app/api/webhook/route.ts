@@ -5,6 +5,7 @@ import { Sender, Priority } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { generateChatResponse } from "@/lib/ai";
 import { searchKnowledge } from "@/lib/knowledge";
+import { sendWhatsAppReply } from "@/lib/whatsapp";
 
 // ─── Auto-Reply Content ───────────────────────────────────────────────────────
 
@@ -16,38 +17,7 @@ How can we help you today?
 2. Surgery Inquiry
 3. Emergency`;
 
-// ─── Helper: Send WhatsApp reply via Cloud API ────────────────────────────────
 
-async function sendWhatsAppReply(to: string, text: string): Promise<void> {
-  const token = process.env.WHATSAPP_TOKEN;
-  const phoneNumberId = process.env.PHONE_NUMBER_ID;
-
-  if (!token || !phoneNumberId) {
-    console.warn("WhatsApp credentials not set. Skipping auto-reply.");
-    return;
-  }
-
-  const url = `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`;
-
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      messaging_product: "whatsapp",
-      to,
-      type: "text",
-      text: { body: text },
-    }),
-  });
-
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`WhatsApp API error [${response.status}]: ${err}`);
-  }
-}
 
 // ─── GET: Webhook Verification ────────────────────────────────────────────────
 
@@ -108,18 +78,25 @@ export async function POST(req: Request) {
               }
 
               // Fetch hospital context using the user's exact message!
-              // This allows the AI to find answers to generic questions (like "What is your address?") 
-              // even if the department is not correctly classified yet.
               const contextChunks = await searchKnowledge(text);
               const hospitalContext = contextChunks.map((c) => c.content).join("\n\n");
 
               // Generate AI response & continuous classification
               const aiResult = await generateChatResponse(chatHistory, text, hospitalContext);
 
+              let newStatus = existingLead?.status || "NEW";
+              if (existingLead && newStatus === "NEW") newStatus = "ENGAGED";
+
               if (aiResult.classification) {
                 department = aiResult.classification.department;
                 problemText = aiResult.classification.problem;
                 priority = aiResult.classification.priority;
+                
+                if (aiResult.classification.booking_intent === "booking_requested") {
+                  newStatus = "BOOKED";
+                } else if (aiResult.classification.booking_intent === "visit_confirmed") {
+                  newStatus = "VISITED";
+                }
               }
 
               // Step 1: Create or update lead
@@ -131,13 +108,18 @@ export async function POST(req: Request) {
                 priority,
               });
 
-              // If AI detected a new classification for an existing lead, update it explicitly
-              if (aiResult.classification && existingLead) {
-                lead = await prisma.lead.update({
-                  where: { id: lead.id },
-                  data: { department, problem: problemText, priority },
-                });
-              }
+              // Apply explicit updates for existing leads and new follow-up tracking fields
+              lead = await prisma.lead.update({
+                where: { id: lead.id },
+                data: { 
+                  department, 
+                  problem: problemText, 
+                  priority,
+                  status: newStatus as any,
+                  lastInteraction: new Date(),
+                  followUpStage: 0 // Reset follow-up sequence since user replied
+                },
+              });
 
               // Step 2: Save incoming user message to DB
               await saveMessage({
