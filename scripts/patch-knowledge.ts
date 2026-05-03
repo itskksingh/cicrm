@@ -2,9 +2,7 @@
  * Micro-patch: Add Hinglish-heavy Pediatrics chunk + Gastro Hinglish boost
  */
 
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import { prisma } from "../lib/prisma";
 
 async function generateEmbedding(text: string): Promise<number[]> {
   const apiKey = process.env.OPENAI_API_KEY;

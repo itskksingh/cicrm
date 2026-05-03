@@ -10,6 +10,7 @@ export type CreateLeadInput = {
   problem: string;
   department: string;
   priority?: Priority;
+  organizationId?: string;
 };
 
 export type AssignLeadInput = {
@@ -26,14 +27,18 @@ const PRIORITY_RANK: Record<Priority, number> = {
 };
 
 
+import { getDefaultOrganizationId } from "./organization";
+
 export async function createOrGetLead(data: CreateLeadInput) {
   const resolvedPriority = data.priority ?? Priority.COLD;
+  const orgId = data.organizationId || await getDefaultOrganizationId();
   const now = new Date();
 
   // Look for an existing open lead with the same phone number
   const existingLead = await prisma.lead.findFirst({
     where: {
       phone: data.phone,
+      organizationId: orgId,
       status: { not: LeadStatus.CLOSED },
     },
     orderBy: { createdAt: "desc" },
@@ -73,6 +78,7 @@ export async function createOrGetLead(data: CreateLeadInput) {
           ? LeadStatus.ASSIGNED
           : LeadStatus.NEW,
       lastMessageAt: now,
+      organizationId: orgId,
     },
   });
 }
@@ -92,8 +98,10 @@ export async function assignLead({ leadId, staffId }: AssignLeadInput) {
 }
 
 
-export async function getLeadsByPriority() {
+export async function getLeadsByPriority(organizationId?: string) {
+  const orgId = organizationId || await getDefaultOrganizationId();
   const leads = await prisma.lead.findMany({
+    where: { organizationId: orgId },
     include: {
       assignedTo: {
         select: { id: true, name: true, phone: true, department: true },

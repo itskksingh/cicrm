@@ -2,6 +2,7 @@ import React from 'react';
 import Sidebar from '@/components/dashboard/Sidebar';
 import Header from '@/components/dashboard/Header';
 import DashboardContent from '@/components/dashboard/Dashboard';
+import WhatsAppHealthBanner from '@/components/dashboard/WhatsAppHealthBanner';
 
 export default function DashboardPage() {
   return (
@@ -12,6 +13,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="flex-1 flex flex-col overflow-hidden min-h-screen relative">
+        <WhatsAppHealthBanner />
         <Header />
         
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-[#F8FAFC]">

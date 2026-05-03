@@ -7,7 +7,10 @@ export type SaveMessageInput = {
   leadId: string;
   sender: Sender;
   content: string;
+  organizationId?: string;
 };
+
+import { getDefaultOrganizationId } from "./organization";
 
 // ─── Query Functions ──────────────────────────────────────────────────────────
 
@@ -27,6 +30,7 @@ export async function saveMessage(data: SaveMessageInput) {
         sender: data.sender,
         content: data.content,
         isRead: data.sender !== Sender.USER, // Staff/Bot messages are pre-read
+        organizationId: data.organizationId || await getDefaultOrganizationId(),
       },
     }),
     prisma.lead.update({
@@ -68,11 +72,13 @@ export async function getMessagesByLead(leadId: string) {
  * historical WhatsApp chat history.
  */
 export async function saveMessageBatch(messages: SaveMessageInput[]) {
+  const orgId = messages[0]?.organizationId || await getDefaultOrganizationId();
   return prisma.message.createMany({
     data: messages.map((m) => ({
       leadId: m.leadId,
       sender: m.sender,
       content: m.content,
+      organizationId: m.organizationId || orgId,
     })),
   });
 }

@@ -9,7 +9,10 @@ export type CreateStaffInput = {
   email?: string;
   role?: Role;
   department: string;
+  organizationId?: string;
 };
+
+import { getDefaultOrganizationId } from "./organization";
 
 // ─── Query Functions ──────────────────────────────────────────────────────────
 
@@ -36,8 +39,10 @@ export async function getStaffByPhone(phone: string) {
  * Returns all staff members — used by the Admin panel for
  * staff management and lead assignment dropdowns.
  */
-export async function getAllStaff() {
+export async function getAllStaff(organizationId?: string) {
+  const orgId = organizationId || await getDefaultOrganizationId();
   return prisma.staff.findMany({
+    where: { organizationId: orgId },
     orderBy: { name: "asc" },
     select: {
       id: true,
@@ -66,6 +71,7 @@ export async function createStaff(data: CreateStaffInput) {
       email: data.email,
       role: data.role ?? Role.CALLER,
       department: data.department,
+      organizationId: data.organizationId || await getDefaultOrganizationId(),
     },
   });
 }
@@ -73,9 +79,10 @@ export async function createStaff(data: CreateStaffInput) {
 /**
  * Returns all callers (non-admin staff) available for lead assignment.
  */
-export async function getAvailableCallers() {
+export async function getAvailableCallers(organizationId?: string) {
+  const orgId = organizationId || await getDefaultOrganizationId();
   return prisma.staff.findMany({
-    where: { role: Role.CALLER },
+    where: { role: Role.CALLER, organizationId: orgId },
     orderBy: { name: "asc" },
     select: { id: true, name: true, department: true, phone: true },
   });

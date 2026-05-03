@@ -25,18 +25,17 @@ export async function generateEmbedding(text: string): Promise<number[]> {
   return data.data[0].embedding;
 }
 
-export async function searchKnowledge(query: string, limit = 3) {
+export async function searchKnowledge(query: string, limit = 3, organizationId?: string) {
   try {
     const queryEmbedding = await generateEmbedding(query);
-    
-    // Convert the embedding array into a formatted string that Postgres pgvector accepts: "[0.1, 0.2, ...]"
     const embeddingString = `[${queryEmbedding.join(',')}]`;
 
     // Using raw SQL to leverage pgvector's <-> operator for vector distance
-    // We cast the string literal to ::vector manually
+    // Filter by organizationId for multi-tenancy
     const results = await prisma.$queryRaw`
       SELECT id, department, content
       FROM knowledge_chunks
+      WHERE "organizationId" = ${organizationId} OR "organizationId" IS NULL
       ORDER BY embedding <-> ${embeddingString}::vector
       LIMIT ${limit}
     `;

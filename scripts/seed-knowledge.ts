@@ -9,9 +9,7 @@
  *   Tier 3: Hospital General Info (Ayushman, diagnostics, address, facilities)
  */
 
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import { prisma } from "../lib/prisma";
 
 async function generateEmbedding(text: string): Promise<number[]> {
   const apiKey = process.env.OPENAI_API_KEY;
