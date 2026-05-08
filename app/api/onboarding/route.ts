@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 
+import { encrypt } from "@/lib/encryption";
+
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
@@ -31,12 +33,12 @@ export async function POST(req: Request) {
         },
       });
 
-      // 2. Create WhatsApp Credentials
+      // 2. Create WhatsApp Credentials (ENCRYPTED)
       await tx.whatsAppCredential.create({
         data: {
           organizationId,
           phoneNumberId: whatsappPhoneNumberId,
-          accessToken: whatsappAccessToken,
+          accessToken: encrypt(whatsappAccessToken),
         },
       });
 

@@ -10,6 +10,7 @@ import { sendWhatsAppReply } from '@/lib/whatsapp';
 import { WebhookJobData } from '@/lib/queue';
 import { getOrganizationByWhatsAppNumber } from '@/lib/db/whatsapp';
 import { getWhatsAppCredentials, updateCredentialHealth, validateOrganizationCredentials } from '@/lib/db/whatsapp-credentials';
+import { classifyIntent, getRiskScore, evaluatePolicy, sanitizeResponse, appendDisclaimer, checkFailsafe } from '@/lib/compliance';
 
 const connection = new IORedis(process.env.REDIS_URL || 'redis://127.0.0.1:6379', {
   maxRetriesPerRequest: null,
@@ -78,17 +79,49 @@ const worker = new Worker<WebhookJobData>(
     const contextChunks = await searchKnowledge(text, 3, organizationId);
     const hospitalContext = contextChunks.map((c) => c.content).join('\n\n');
 
-    let aiResult;
-    try {
-      aiResult = await generateChatResponse(chatHistory, text, hospitalContext);
-    } catch (aiError) {
-      console.error('[Worker] AI Failed, using fallback. Error:', aiError);
-      // Fallback message via DB config or hardcoded
+    // COMPLIANCE LAYER: Intent & Policy Engine
+    const intent = classifyIntent(text);
+    const riskScore = getRiskScore(text);
+    const policyRedirect = evaluatePolicy(intent);
+
+    let aiResult: any;
+    let sanitizerTriggered = false;
+
+    if (policyRedirect) {
+      console.log(`[Worker] Policy triggered for intent: ${intent}. Redirecting.`);
       aiResult = {
-        reply: 'हमारी टीम आपसे जल्द संपर्क करेगी',
-        classification: null
+        reply: policyRedirect,
+        classification: {
+          department: "General",
+          problem: text,
+          priority: intent === "EMERGENCY" ? Priority.HOT : Priority.WARM,
+          booking_intent: "none"
+        }
       };
+    } else {
+      try {
+        aiResult = await generateChatResponse(chatHistory, text, hospitalContext);
+      } catch (aiError) {
+        console.error('[Worker] AI Failed, using fallback. Error:', aiError);
+        // Fallback message via DB config or hardcoded
+        aiResult = {
+          reply: 'हमारी टीम आपसे जल्द संपर्क करेगी',
+          classification: null
+        };
+      }
     }
+
+    // COMPLIANCE LAYER: Output Sanitizer
+    const sanitizedRedirect = sanitizeResponse(aiResult.reply);
+    if (sanitizedRedirect) {
+      console.log(`[Worker] Sanitizer triggered for AI reply. Overriding response.`);
+      sanitizerTriggered = true;
+      aiResult.reply = sanitizedRedirect;
+    }
+
+    // COMPLIANCE LAYER: Auto Disclaimer
+    const isFirstMessage = chatHistory.length === 0;
+    aiResult.reply = appendDisclaimer(aiResult.reply, isFirstMessage);
 
     let newStatus = existingLead?.status || 'NEW';
     if (existingLead && newStatus === 'NEW') newStatus = 'ENGAGED';
@@ -144,6 +177,9 @@ const worker = new Worker<WebhookJobData>(
         data: { lastMessageAt: new Date() }
       })
     ]);
+
+    // COMPLIANCE LAYER: Failsafe Mode
+    await checkFailsafe(lead.id, riskScore, sanitizerTriggered);
 
     // Step 3: Send AI reply via WhatsApp
     try {

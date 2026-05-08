@@ -9,7 +9,7 @@ import { prisma } from '@/lib/prisma'
  */
 export async function getOrganizationByWhatsAppNumber(phoneNumber: string) {
   try {
-    const mapping = await prisma.whatsappNumber.findUnique({
+    const mapping = await prisma.whatsAppNumber.findUnique({
       where: {
         phoneNumber: phoneNumber,
       },

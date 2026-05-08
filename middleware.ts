@@ -14,7 +14,7 @@ export async function middleware(request: NextRequest) {
   if (explicitTenant) requestHeaders.set('x-tenant-id', explicitTenant)
 
   const { pathname } = request.nextUrl
-  const secret = process.env.NEXTAUTH_SECRET || "fallback-secret-for-dev"
+  const secret = process.env.NEXTAUTH_SECRET
 
   // ─── Super Admin Routes ──────────────────────────────────────────────────
   if (pathname.startsWith('/super-admin')) {
