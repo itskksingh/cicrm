@@ -23,6 +23,10 @@ export async function POST(req: Request) {
 
     const organizationId = session.user.organizationId;
 
+    if (!organizationId) {
+      return NextResponse.json({ error: "Organization ID is required" }, { status: 400 });
+    }
+
     await prisma.$transaction(async (tx) => {
       // 1. Update Organization Name
       await tx.organization.update({
