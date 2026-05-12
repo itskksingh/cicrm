@@ -3,7 +3,7 @@ import { getMessagesByLead, markMessagesAsRead, saveMessage } from "@/lib/db/mes
 import { getLeadById } from "@/lib/db/leads";
 import { Sender } from "@prisma/client";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 import { getWhatsAppCredentials } from "@/lib/db/whatsapp-credentials";
 
 export async function GET(req: Request) {
