@@ -1,12 +1,25 @@
 "use client";
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useLeads } from '@/hooks/useLeads';
 import { formatDistanceToNow } from 'date-fns';
+import Link from 'next/link';
+import CallOutcomeModal from '../leads/CallOutcomeModal';
 
 export default function ProspectList() {
   const { leads, loading } = useLeads();
+  const [selectedLead, setSelectedLead] = useState<{id: string, name: string, phone: string} | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
   const prospects = leads.filter(l => l.priority !== 'HOT');
+
+  const handleCall = (lead: any) => {
+    window.location.href = `tel:${lead.phone}`;
+    setTimeout(() => {
+      setSelectedLead({ id: lead.id, name: lead.name || lead.phone, phone: lead.phone });
+      setIsModalOpen(true);
+    }, 1000);
+  };
 
   return (
     <div className="px-4 mt-8">
@@ -31,34 +44,48 @@ export default function ProspectList() {
 
             return (
               <div key={prospect.id} className={`bg-white rounded-xl shadow-sm p-4 flex items-center justify-between border-l-4 ${borderColor}`}>
-                <div className="flex items-center gap-4">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${avatarBg} ${avatarColor}`}>
+                <Link href={`/dashboard/leads/${prospect.id}`} className="flex items-center gap-4 flex-1 min-w-0 active:opacity-70 transition-opacity">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${avatarBg} ${avatarColor}`}>
                     {initials}
                   </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-content">{prospect.name || prospect.phone}</h3>
-                    <p className="text-[11px] text-outline/80 font-medium mt-0.5 max-w-[180px] leading-tight truncate">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-sm font-bold text-content truncate">{prospect.name || prospect.phone}</h3>
+                    <p className="text-[11px] text-outline/80 font-medium mt-0.5 leading-tight truncate">
                       {prospect.problem}
                     </p>
                     <p className="text-[10px] text-outline/60 mt-0.5">
                       Waiting: {formatDistanceToNow(new Date(prospect.lastMessageAt))}
                     </p>
                   </div>
-                </div>
+                </Link>
                 
-                <div className="flex items-center gap-3">
-                  <div className="text-right">
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => handleCall(prospect)}
+                    className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center active:scale-90 transition-transform"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">call</span>
+                  </button>
+                  <div className="text-right min-w-[60px]">
                     <p className="text-[10px] font-bold text-outline/60 tracking-wider">STATUS</p>
                     <p className={`text-xs font-bold leading-tight ${badgeColor}`}>{prospect.priority}</p>
-                    <p className={`text-xs font-bold leading-tight ${badgeColor}`}>LEAD</p>
                   </div>
-                  <span className="material-symbols-outlined text-outline/40">chevron_right</span>
                 </div>
               </div>
             );
           })
         )}
       </div>
+
+      {selectedLead && (
+        <CallOutcomeModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          leadId={selectedLead.id}
+          leadName={selectedLead.name}
+          onSuccess={() => window.location.reload()}
+        />
+      )}
     </div>
   );
 }

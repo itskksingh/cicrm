@@ -3,10 +3,12 @@ import Sidebar from '@/components/dashboard/Sidebar';
 import Header from '@/components/dashboard/Header';
 import DesktopLeadsPage from '@/components/leads/LeadsPage';
 import MobileLeadsPage from '@/components/mobile-leads/MobileLeadsPage';
+import WhatsAppHealthBanner from '@/components/dashboard/WhatsAppHealthBanner';
 
 export default function LeadsDashboard() {
   return (
     <>
+      <WhatsAppHealthBanner />
       {/* Desktop View (visible on lg and up) */}
       <div className="hidden lg:flex bg-[#F8FAFC] min-h-screen">
         {/* Sidebar - fixed on left */}

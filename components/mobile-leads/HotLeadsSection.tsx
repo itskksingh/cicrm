@@ -27,7 +27,9 @@ export default function HotLeadsSection() {
           hotLeads.map((lead) => (
             <MobileLeadCard 
               key={lead.id} 
+              id={lead.id}
               name={lead.name || lead.phone}
+              phone={lead.phone}
               subtitle={lead.problem.substring(0, 40) + '...'}
               tag="ACTION REQUIRED"
               aiAction="Call Now"
@@ -35,6 +37,7 @@ export default function HotLeadsSection() {
               source={lead.department}
               urgencyText="Waiting"
               urgencyColor="text-[#dc2626]"
+              onUpdate={() => window.location.reload()}
             />
           ))
         )}

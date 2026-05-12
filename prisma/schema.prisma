@@ -7,7 +7,28 @@ datasource db {
   provider   = "postgresql"
   url        = env("DATABASE_URL")
   directUrl  = env("DIRECT_URL")
-  extensions = [vector]
+  extensions = [vector(schema: "public")]
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  onboardingComplete Boolean @default(false)
+  disabled  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  staff           Staff[]
+  users           User[]
+  leads           Lead[]
+  messages        Message[]
+  callLogs        CallLog[]
+  knowledgeChunks KnowledgeChunk[]
+  doctors         Doctor[]
+  settings          Settings[]
+  whatsappNumbers   WhatsAppNumber[]
+  whatsappCredential WhatsAppCredential?
+
+  @@map("organizations")
 }
 
 /// Hospital staff member who uses the CRM dashboard
@@ -22,6 +43,9 @@ model Staff {
   updatedAt  DateTime  @updatedAt
   callLogs   CallLog[]
   leads      Lead[]    @relation("AssignedLeads")
+  
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
 
   @@map("staff")
 }
@@ -52,18 +76,25 @@ model Lead {
   assignedTo   Staff?     @relation("AssignedLeads", fields: [assignedToId], references: [id])
   messages     Message[]
 
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
   @@map("leads")
 }
 
 /// A single message in the WhatsApp chat history for a lead
 model Message {
   id        String   @id @default(uuid())
+  messageId String?  @unique
   content   String
   sender    Sender
   timestamp DateTime @default(now())
   isRead    Boolean  @default(false)
   leadId    String
   lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
 
   @@map("messages")
 }
@@ -79,6 +110,9 @@ model CallLog {
   staffId   String
   lead      Lead        @relation(fields: [leadId], references: [id], onDelete: Cascade)
   staff     Staff       @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
 
   @@map("call_logs")
 }
@@ -125,5 +159,79 @@ model KnowledgeChunk {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
   @@map("knowledge_chunks")
+}
+
+model Doctor {
+  id             String        @id @default(uuid())
+  name           String
+  department     String
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@map("doctors")
+}
+
+model Settings {
+  id             String        @id @default(uuid())
+  key            String
+  value          String
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@unique([organizationId, key])
+  @@map("settings")
+}
+
+model User {
+  id             String        @id @default(uuid())
+  email          String?       @unique
+  password       String?
+  phone          String?       @unique
+  /// 'super_admin' | 'admin' | 'staff'
+  role           String        @default("staff")
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@map("users")
+}
+
+/// Maps a WhatsApp Business phone number to an organization for multi-tenant webhook routing
+model WhatsAppNumber {
+  id             String       @id @default(uuid())
+  /// E.164 normalized format e.g. +919876543210
+  phoneNumber    String       @unique
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@map("whatsapp_numbers")
+}
+
+/// Stores per-organization WhatsApp API credentials
+model WhatsAppCredential {
+  id                String       @id @default(uuid())
+  organizationId    String       @unique
+  organization      Organization @relation(fields: [organizationId], references: [id])
+  phoneNumberId     String
+  accessToken       String
+  businessAccountId String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  lastSuccessAt     DateTime?
+  lastFailureAt     DateTime?
+  failureCount      Int          @default(0)
+
+  @@map("whatsapp_credentials")
 }

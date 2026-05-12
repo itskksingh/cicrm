@@ -9,7 +9,10 @@ export type LogCallInput = {
   duration: number; // Duration in seconds
   outcome: CallOutcome;
   notes?: string;
+  organizationId?: string;
 };
+
+import { getDefaultOrganizationId } from "./organization";
 
 // ─── Query Functions ──────────────────────────────────────────────────────────
 
@@ -39,6 +42,7 @@ export async function logCall(data: LogCallInput) {
         duration: data.duration,
         outcome: data.outcome,
         notes: data.notes,
+        organizationId: data.organizationId || await getDefaultOrganizationId(),
       },
       include: {
         lead: { select: { name: true, phone: true } },
@@ -90,15 +94,18 @@ export async function getCallsByStaff(staffId: string) {
  * Returns conversion analytics grouped by outcome.
  * Used on the Admin analytics dashboard.
  */
-export async function getCallAnalytics() {
+export async function getCallAnalytics(organizationId?: string) {
+  const orgId = organizationId || await getDefaultOrganizationId();
   const [total, byOutcome, avgDuration] = await prisma.$transaction([
-    prisma.callLog.count(),
+    prisma.callLog.count({ where: { organizationId: orgId } }),
     prisma.callLog.groupBy({
       by: ["outcome"],
+      where: { organizationId: orgId },
       _count: { outcome: true },
       orderBy: { outcome: "asc" },
     }),
     prisma.callLog.aggregate({
+      where: { organizationId: orgId },
       _avg: { duration: true },
     }),
   ]);

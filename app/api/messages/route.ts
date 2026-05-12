@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { getMessagesByLead, markMessagesAsRead, saveMessage } from "@/lib/db/messages";
 import { getLeadById } from "@/lib/db/leads";
 import { Sender } from "@prisma/client";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { getWhatsAppCredentials } from "@/lib/db/whatsapp-credentials";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -40,8 +43,21 @@ export async function POST(req: Request) {
     // Format phone number (no '+', includes country code)
     const phoneNumber = lead.phone.replace(/\+/g, "");
 
-    const token = process.env.WHATSAPP_TOKEN;
-    const phoneNumberId = process.env.PHONE_NUMBER_ID;
+    let token = process.env.WHATSAPP_TOKEN;
+    let phoneNumberId = process.env.PHONE_NUMBER_ID;
+
+    if (lead.organizationId) {
+      const orgCreds = await getWhatsAppCredentials(lead.organizationId);
+      if (orgCreds) {
+        console.log(`[WhatsApp] Using DB credentials for org ${lead.organizationId}`);
+        token = orgCreds.accessToken || token;
+        phoneNumberId = orgCreds.phoneNumberId || phoneNumberId;
+      } else {
+        console.log(`[WhatsApp] No DB credentials found for org ${lead.organizationId}, using environment fallback`);
+      }
+    } else {
+      console.log(`[WhatsApp] No organizationId found for lead, using environment fallback`);
+    }
 
     if (!token || !phoneNumberId) {
       console.warn("WhatsApp credentials not set. Cannot send message.");
@@ -77,11 +93,17 @@ export async function POST(req: Request) {
     const responseData = await response.json();
     console.log("WhatsApp API Response:", JSON.stringify(responseData, null, 2));
 
-    // Save message to DB after successful API call
+    // Save message to DB after successful API call.
+    // organizationId is sourced from the session for tenant isolation.
+    // Falls back to getDefaultOrganizationId() inside saveMessage if no session.
+    const session = await getServerSession(authOptions);
+    const organizationId = session?.user?.organizationId ?? undefined;
+
     const savedMessage = await saveMessage({
       leadId,
       sender: sender || Sender.STAFF,
       content,
+      organizationId,
     });
 
     return NextResponse.json(savedMessage, { status: 200 });

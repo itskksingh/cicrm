@@ -10,9 +10,7 @@
  *           npm run test:rag "hospital ka address kya hai"
  */
 
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import { prisma } from "../lib/prisma";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY!;
 
 // ─── Embedding ────────────────────────────────────────────────────

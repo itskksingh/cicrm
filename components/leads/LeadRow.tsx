@@ -1,4 +1,4 @@
-import React from 'react';
+import Image from 'next/image';
 
 interface LeadProps {
   name: string;
@@ -60,9 +60,15 @@ export default function LeadRow({ name, phone, problem, department, priority, st
       {/* Assigned Staff */}
       <td className="py-5 px-6">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-surface border border-[#E2E8F0] shadow-sm flex items-center justify-center overflow-hidden shrink-0">
+          <div className="w-8 h-8 rounded-full bg-surface border border-[#E2E8F0] shadow-sm flex items-center justify-center overflow-hidden shrink-0 relative">
             {staff.avatar ? (
-              <img src={staff.avatar} alt="avatar" className="w-full h-full object-cover" />
+              <Image 
+                src={staff.avatar} 
+                alt="avatar" 
+                fill
+                className="object-cover"
+                unoptimized
+              />
             ) : (
               <span className="material-symbols-outlined text-[16px] text-outline">person</span>
             )}
