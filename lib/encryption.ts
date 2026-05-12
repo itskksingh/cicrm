@@ -2,7 +2,9 @@ import crypto from 'crypto';
 
 const ALGORITHM = 'aes-256-cbc';
 // Ensure ENCRYPTION_KEY is a 32-byte (64 character hex) string in production
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+// Must be a 32-byte (64 character hex) string. 
+// Fallback is only for build-time safety; real key must be in environment.
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || "0000000000000000000000000000000000000000000000000000000000000000";
 
 /**
  * Encrypts a plain text string using AES-256-CBC.

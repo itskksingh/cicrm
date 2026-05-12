@@ -19,7 +19,7 @@ export default async function SettingsPage() {
     );
   }
 
-  const orgId = session.user.organizationId;
+  const orgId = session.user.organizationId as string;
   const settings = await prisma.settings.findMany({
     where: { organizationId: orgId },
     orderBy: { key: 'asc' }

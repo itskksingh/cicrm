@@ -27,10 +27,11 @@ export async function POST(req: Request) {
       id: adminUser.id,
       email: adminUser.email,
       role: adminUser.role,
+      phone: adminUser.phone,
       organizationId: adminUser.organizationId,
       impersonatedBy: session.user.id, // Audit trail
     },
-    secret: process.env.NEXTAUTH_SECRET || "fallback-secret-for-dev",
+    secret: process.env.NEXTAUTH_SECRET!,
   });
 
   return NextResponse.json({ token: impersonationToken });
