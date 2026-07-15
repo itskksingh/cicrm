@@ -3,26 +3,10 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60; // Allow more time for AI processing on Vercel
 
-import { createOrGetLead } from "@/lib/db/leads";
-import { saveMessage } from "@/lib/db/messages";
-import { Sender, Priority } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
-import { generateChatResponse } from "@/lib/ai";
-import { searchKnowledge } from "@/lib/knowledge";
-import { sendWhatsAppReply } from "@/lib/whatsapp";
-import { getOrganizationByWhatsAppNumber } from "@/lib/db/whatsapp";
-
-// ─── Auto-Reply Content ───────────────────────────────────────────────────────
-
-const AUTO_REPLY_TEXT = `🙏 Thank you for contacting Crest Care Hospital.
-
-How can we help you today?
-
-1. Doctor Appointment
-2. Surgery Inquiry
-3. Emergency`;
-
-
+import {
+  getOrganizationByPhoneNumberId,
+  getOrganizationByWhatsAppNumber,
+} from "@/lib/db/whatsapp";
 
 // ─── GET: Webhook Verification ────────────────────────────────────────────────
 
@@ -41,11 +25,42 @@ export async function GET(req: Request) {
 
 // ─── POST: Receive Incoming Messages ─────────────────────────────────────────
 
-import { webhookQueue } from "@/lib/queue";
+import { getWebhookQueue } from "@/lib/queue";
+
+import crypto from "crypto";
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    const rawBody = await req.text();
+    const signature = req.headers.get("x-hub-signature-256");
+
+    if (process.env.NODE_ENV === "production") {
+      const appSecret = process.env.WHATSAPP_APP_SECRET;
+      if (!appSecret) {
+        console.error("[Webhook] WHATSAPP_APP_SECRET is not configured");
+        return NextResponse.json({ error: "Webhook is not configured" }, { status: 503 });
+      }
+
+      if (!signature) {
+        return NextResponse.json({ error: "Missing signature" }, { status: 401 });
+      }
+
+      const expectedSignature = "sha256=" + crypto
+        .createHmac("sha256", appSecret)
+        .update(rawBody)
+        .digest("hex");
+
+      const actualBuffer = Buffer.from(signature);
+      const expectedBuffer = Buffer.from(expectedSignature);
+      if (
+        actualBuffer.length !== expectedBuffer.length ||
+        !crypto.timingSafeEqual(actualBuffer, expectedBuffer)
+      ) {
+        return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+      }
+    }
+
+    const body = JSON.parse(rawBody);
 
     if (body.object === "whatsapp_business_account") {
       for (const entry of body.entry) {
@@ -53,18 +68,32 @@ export async function POST(req: Request) {
           if (change.value && change.value.messages) {
             const value = change.value;
             const metadata = value.metadata;
+            const phoneNumberId = metadata?.phone_number_id;
             const businessNumber = metadata?.display_phone_number
               ? metadata.display_phone_number.replace(/[+\s]/g, "")
               : null;
 
-            // Resolve organizationId early
-            let organizationId: string | undefined;
-            if (businessNumber) {
-              const mapping = await getOrganizationByWhatsAppNumber(businessNumber);
-              if (mapping) {
-                organizationId = mapping.organizationId;
-              }
+            // Phone-number ID is Meta's stable identifier. Display-number mapping
+            // remains a compatibility fallback for already-onboarded organizations.
+            const mapping = phoneNumberId
+              ? await getOrganizationByPhoneNumberId(phoneNumberId)
+              : businessNumber
+                ? await getOrganizationByWhatsAppNumber(businessNumber)
+                : null;
+
+            if (!mapping || mapping.organization.disabled) {
+              console.error(
+                JSON.stringify({
+                  event: "whatsapp_webhook_quarantined",
+                  reason: "UNKNOWN_OR_DISABLED_TENANT",
+                  phoneNumberId: phoneNumberId ?? null,
+                  businessNumber,
+                }),
+              );
+              continue;
             }
+
+            const organizationId = mapping.organizationId;
 
             const message = value.messages[0];
             const contact = value.contacts?.[0];
@@ -75,9 +104,17 @@ export async function POST(req: Request) {
               const name = contact?.profile?.name;
               const messageId = message.id;
 
-              await webhookQueue.add(
+              await getWebhookQueue().add(
                 "process-whatsapp",
-                { messageId, phone, text, name, businessNumber, organizationId },
+                {
+                  messageId,
+                  phone,
+                  text,
+                  name,
+                  businessNumber,
+                  phoneNumberId,
+                  organizationId,
+                },
                 {
                   jobId: messageId,
                   attempts: 3,
@@ -94,6 +131,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ status: "ok" }, { status: 200 });
   } catch (error) {
     console.error("Webhook error:", error);
-    return NextResponse.json({ status: "error" }, { status: 200 });
+    // Let Meta retry transient queue/database failures. Message IDs are used as
+    // queue job IDs and stored uniquely, so retries remain idempotent.
+    return NextResponse.json({ status: "error" }, { status: 500 });
   }
 }

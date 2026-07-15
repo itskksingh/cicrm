@@ -10,25 +10,35 @@ const FALLBACK_DOCTORS = [
 ]
 
 const FALLBACK_SETTINGS = {
-  'hospital_name': 'Crest Care Hospital',
+  'hospital_name': 'Your Hospital',
   'whatsapp_fallback_message': 'हमारी टीम आपसे जल्द संपर्क करेगी'
 }
 
 export async function getDoctors(organizationId?: string) {
   const orgId = organizationId || await getDefaultOrganizationId()
+
+  if (!orgId) {
+    return FALLBACK_DOCTORS
+  }
+
   const doctors = await prisma.doctor.findMany({
     where: { organizationId: orgId }
   })
-  
+
   if (doctors.length === 0) {
     return FALLBACK_DOCTORS
   }
-  
+
   return doctors
 }
 
 export async function getSetting(key: string, organizationId?: string): Promise<string> {
   const orgId = organizationId || await getDefaultOrganizationId()
+
+  if (!orgId) {
+    return FALLBACK_SETTINGS[key as keyof typeof FALLBACK_SETTINGS] || ''
+  }
+
   const setting = await prisma.settings.findUnique({
     where: {
       organizationId_key: {

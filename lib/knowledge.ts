@@ -26,21 +26,32 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 }
 
 export async function searchKnowledge(query: string, limit = 3, organizationId?: string) {
+  if (!organizationId) {
+    console.error("[RAG] Refusing knowledge search without an organization");
+    return [];
+  }
+
   try {
     const queryEmbedding = await generateEmbedding(query);
     const embeddingString = `[${queryEmbedding.join(',')}]`;
 
     // Using raw SQL to leverage pgvector's <-> operator for vector distance
-    // Filter by organizationId for multi-tenancy
+    // Patient-facing knowledge must be owned by the active organization.
+    // NULL/global chunks are intentionally excluded to prevent tenant leakage.
     const results = await prisma.$queryRaw`
-      SELECT id, department, content
+      SELECT id, department, content, "organizationId"
       FROM knowledge_chunks
-      WHERE "organizationId" = ${organizationId} OR "organizationId" IS NULL
+      WHERE "organizationId" = ${organizationId}
       ORDER BY embedding <-> ${embeddingString}::vector
       LIMIT ${limit}
     `;
     
-    return results as { id: string, department: string, content: string }[];
+    return results as {
+      id: string;
+      department: string;
+      content: string;
+      organizationId: string;
+    }[];
   } catch (error) {
     console.error("Vector search error:", error);
     // If pgvector is not set up yet, don't crash the whole app
@@ -73,7 +84,13 @@ export async function getKnowledgeChunks() {
     SELECT id, department, content, metadata, "createdAt"
     FROM knowledge_chunks
     ORDER BY "createdAt" DESC
-  ` as Promise<{ id: string; department: string; content: string; metadata: any; createdAt: Date }[]>;
+  ` as Promise<{
+    id: string;
+    department: string;
+    content: string;
+    metadata: unknown;
+    createdAt: Date;
+  }[]>;
 }
 
 // Delete a knowledge chunk

@@ -32,6 +32,7 @@ export async function POST(req: Request) {
       impersonatedBy: session.user.id, // Audit trail
     },
     secret: process.env.NEXTAUTH_SECRET!,
+    maxAge: 60 * 30, // 30 minutes
   });
 
   return NextResponse.json({ token: impersonationToken });

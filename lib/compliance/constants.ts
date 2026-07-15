@@ -4,6 +4,7 @@ export const DOCTOR_REDIRECT_MESSAGE = "Aapke symptoms doctor ko dikhana zaroori
 
 export const EMERGENCY_MESSAGE = "Yeh emergency ho sakti hai ⚠️\nKripya turant hospital aayein ya call karein.";
 
-export const FIRST_MESSAGE_DISCLAIMER = "Namaste 🙏\nCrest Care Hospital me aapka swagat hai.\n⚠️ Hum WhatsApp par medical advice provide nahi karte.\nKripya sahi diagnosis ke liye doctor se milen.";
+export const getFirstMessageDisclaimer = (hospitalName: string) =>
+  `Namaste 🙏\n${hospitalName} me aapka swagat hai.\n⚠️ Hum WhatsApp par medical advice provide nahi karte.\nKripya sahi diagnosis ke liye doctor se milen.`;
 
 export const FOOTER_DISCLAIMER = "—\n⚠️ This is an automated system.\nWe do not provide medical advice on WhatsApp.\nPlease consult a doctor.";

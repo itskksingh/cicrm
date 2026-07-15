@@ -1,16 +1,16 @@
 import { Worker } from 'bullmq';
 import IORedis from 'ioredis';
 import { prisma } from '@/lib/prisma';
-import { Sender, Priority } from '@prisma/client';
+import { LeadStatus, Sender, Priority } from '@prisma/client';
 import { createOrGetLead } from '@/lib/db/leads';
-import { saveMessage } from '@/lib/db/messages';
-import { generateChatResponse } from '@/lib/ai';
+import { generateChatResponse, type UnifiedAIResponse } from '@/lib/ai';
 import { searchKnowledge } from '@/lib/knowledge';
-import { sendWhatsAppReply } from '@/lib/whatsapp';
-import { WebhookJobData } from '@/lib/queue';
-import { getOrganizationByWhatsAppNumber } from '@/lib/db/whatsapp';
-import { getWhatsAppCredentials, updateCredentialHealth, validateOrganizationCredentials } from '@/lib/db/whatsapp-credentials';
-import { classifyIntent, getRiskScore, evaluatePolicy, sanitizeResponse, appendDisclaimer, checkFailsafe } from '@/lib/compliance';
+import type { WebhookJobData } from '@/lib/queue';
+import { getOrganizationByPhoneNumberId } from '@/lib/db/whatsapp';
+import { classifyIntent, getRiskScore, evaluatePolicy, sanitizeResponse, appendDisclaimer } from '@/lib/compliance';
+import { evaluateChannelPolicy, evaluateMedicalSafety } from '@/lib/messaging/policy';
+import { sendSafeServiceMessage } from '@/lib/messaging/safe-send';
+import { escalateLead } from '@/lib/messaging/handoff';
 
 const connection = new IORedis(process.env.REDIS_URL || 'redis://127.0.0.1:6379', {
   maxRetriesPerRequest: null,
@@ -20,20 +20,42 @@ const connection = new IORedis(process.env.REDIS_URL || 'redis://127.0.0.1:6379'
 const worker = new Worker<WebhookJobData>(
   'webhook-events',
   async (job) => {
-    const { messageId, phone, text, name, businessNumber } = job.data;
-    let organizationId = job.data.organizationId;
+    const { messageId, phone, text, name, businessNumber, phoneNumberId } = job.data;
+    const organizationId = job.data.organizationId;
 
     console.log(`[Worker] Processing job ${job.id} for message ${messageId} (Business: ${businessNumber})`);
 
-    // Multi-tenant: Map business number to organization
-    if (businessNumber) {
-      const mapping = await getOrganizationByWhatsAppNumber(businessNumber);
-      if (mapping) {
-        organizationId = mapping.organizationId;
-        console.log(`[Worker] Mapped business number ${businessNumber} to organization: ${organizationId}`);
-      } else {
-        console.error(`[Worker] CRITICAL: No organization found for business number ${businessNumber}. Falling back to default.`);
+    if (!organizationId) {
+      throw new Error(`TENANT_REQUIRED: message ${messageId} was not mapped to an organization`);
+    }
+
+    // Revalidate Meta's stable phone-number ID at the worker boundary. A
+    // mismatch is a hard failure rather than a tenant/global fallback.
+    if (phoneNumberId) {
+      const mapping = await getOrganizationByPhoneNumberId(phoneNumberId);
+      if (!mapping || mapping.organizationId !== organizationId || mapping.organization.disabled) {
+        throw new Error(`TENANT_MISMATCH: phone number ID ${phoneNumberId} failed validation`);
       }
+    } else {
+      throw new Error(`PHONE_NUMBER_ID_REQUIRED: message ${messageId} has no stable sender identifier`);
+    }
+
+    const organization = await prisma.organization.findFirst({
+      where: { id: organizationId, disabled: false },
+      select: { id: true, name: true },
+    });
+    if (!organization) {
+      throw new Error(`TENANT_INACTIVE: organization ${organizationId} is unavailable`);
+    }
+
+    // The current inbound patient message establishes the consent basis for a
+    // service reply. This is checked again against persisted data before send.
+    const inboundEligibility = evaluateChannelPolicy({
+      origin: 'REACTIVE_AUTOMATION',
+      lastPatientMessageAt: new Date(),
+    });
+    if (!inboundEligibility.allowed) {
+      throw new Error(`CHANNEL_POLICY_BLOCKED: ${inboundEligibility.reason}`);
     }
 
     // Check deduplication
@@ -84,7 +106,7 @@ const worker = new Worker<WebhookJobData>(
     const riskScore = getRiskScore(text);
     const policyRedirect = evaluatePolicy(intent);
 
-    let aiResult: any;
+    let aiResult: UnifiedAIResponse;
     let sanitizerTriggered = false;
 
     if (policyRedirect) {
@@ -106,25 +128,41 @@ const worker = new Worker<WebhookJobData>(
         // Fallback message via DB config or hardcoded
         aiResult = {
           reply: 'हमारी टीम आपसे जल्द संपर्क करेगी',
-          classification: null
+          classification: undefined
         };
       }
     }
 
-    // COMPLIANCE LAYER: Output Sanitizer
+    // COMPLIANCE LAYER: Output Sanitizer and deterministic medical safety gate
     const sanitizedRedirect = sanitizeResponse(aiResult.reply);
     if (sanitizedRedirect) {
-      console.log(`[Worker] Sanitizer triggered for AI reply. Overriding response.`);
       sanitizerTriggered = true;
-      aiResult.reply = sanitizedRedirect;
+    }
+
+    const medicalDecision = evaluateMedicalSafety({
+      intent,
+      riskScore,
+      draftReply: aiResult.reply,
+      sanitizerTriggered,
+    });
+
+    if (medicalDecision.finalReply) {
+      aiResult.reply = medicalDecision.finalReply;
     }
 
     // COMPLIANCE LAYER: Auto Disclaimer
     const isFirstMessage = chatHistory.length === 0;
-    aiResult.reply = appendDisclaimer(aiResult.reply, isFirstMessage);
 
-    let newStatus = existingLead?.status || 'NEW';
-    if (existingLead && newStatus === 'NEW') newStatus = 'ENGAGED';
+    if (medicalDecision.finalReply) {
+      aiResult.reply = appendDisclaimer(
+        medicalDecision.finalReply,
+        isFirstMessage,
+        organization.name,
+      );
+    }
+
+    let newStatus: LeadStatus = existingLead?.status ?? LeadStatus.NEW;
+    if (existingLead && newStatus === LeadStatus.NEW) newStatus = LeadStatus.ENGAGED;
 
     if (aiResult.classification) {
       department = aiResult.classification.department;
@@ -132,9 +170,9 @@ const worker = new Worker<WebhookJobData>(
       priority = aiResult.classification.priority;
       
       if (aiResult.classification.booking_intent === 'booking_requested') {
-        newStatus = 'BOOKED';
+        newStatus = LeadStatus.BOOKED;
       } else if (aiResult.classification.booking_intent === 'visit_confirmed') {
-        newStatus = 'VISITED';
+        newStatus = LeadStatus.VISITED;
       }
     }
 
@@ -154,7 +192,7 @@ const worker = new Worker<WebhookJobData>(
         department, 
         problem: problemText, 
         priority,
-        status: newStatus as any,
+        status: newStatus,
         lastInteraction: new Date(),
         followUpStage: 0 
       },
@@ -178,43 +216,37 @@ const worker = new Worker<WebhookJobData>(
       })
     ]);
 
-    // COMPLIANCE LAYER: Failsafe Mode
-    await checkFailsafe(lead.id, riskScore, sanitizerTriggered);
+    if (medicalDecision.action !== 'SEND') {
+      await escalateLead({
+        organizationId,
+        leadId: lead.id,
+        reason: medicalDecision.reason,
+        priority: medicalDecision.priority,
+      });
+    }
+
+    if (medicalDecision.action === 'REFUSE' || !medicalDecision.finalReply) {
+      console.warn(
+        JSON.stringify({
+          event: 'automated_reply_refused',
+          organizationId,
+          leadId: lead.id,
+          reason: medicalDecision.reason,
+        }),
+      );
+      return;
+    }
 
     // Step 3: Send AI reply via WhatsApp
     try {
-      let credentials = undefined;
-      if (organizationId) {
-        await validateOrganizationCredentials(organizationId);
-        const orgCreds = await getWhatsAppCredentials(organizationId);
-        if (orgCreds) {
-          console.log(`[WhatsApp] Using DB credentials for org ${organizationId}`);
-          credentials = {
-            accessToken: orgCreds.accessToken,
-            phoneNumberId: orgCreds.phoneNumberId
-          };
-        }
-      } else {
-        console.log(`[WhatsApp] No organizationId provided, using environment fallback`);
-      }
-
-      await sendWhatsAppReply(phone, aiResult.reply, credentials);
-
-      if (organizationId) {
-        await updateCredentialHealth(organizationId, true);
-      }
-
-      // Step 4: Save the bot reply in DB
-      await saveMessage({
+      await sendSafeServiceMessage({
+        organizationId,
         leadId: lead.id,
+        origin: 'REACTIVE_AUTOMATION',
         sender: Sender.BOT,
         content: aiResult.reply,
-        organizationId,
       });
     } catch (replyError) {
-      if (organizationId) {
-        await updateCredentialHealth(organizationId, false);
-      }
       console.error('[Worker] Auto-reply failed:', replyError);
       throw replyError; // Let BullMQ retry
     }

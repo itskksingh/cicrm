@@ -16,6 +16,7 @@ export async function POST(req: Request) {
     const { 
       hospitalName, 
       whatsappPhoneNumberId, 
+      whatsappDisplayPhone,
       whatsappAccessToken, 
       doctorName, 
       doctorDepartment 
@@ -46,7 +47,15 @@ export async function POST(req: Request) {
         },
       });
 
-      // 3. Create First Doctor
+      // 3. Create WhatsApp Number Mapping for Webhook Routing
+      await tx.whatsAppNumber.create({
+        data: {
+          phoneNumber: whatsappDisplayPhone,
+          organizationId,
+        },
+      });
+
+      // 4. Create First Doctor
       await tx.doctor.create({
         data: {
           name: doctorName,
