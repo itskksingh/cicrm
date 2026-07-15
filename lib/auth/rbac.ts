@@ -1,5 +1,5 @@
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 import { NextResponse } from "next/server";
 
 // ─── Role Constants ────────────────────────────────────────────────────────────
@@ -23,6 +23,8 @@ export type AppRole = (typeof ROLES)[keyof typeof ROLES];
  * if (result instanceof NextResponse) return result;
  * const { session, organizationId } = result;
  */
+import { prisma } from "@/lib/prisma";
+
 export async function requireRole(allowedRoles: AppRole[]) {
   const session = await getServerSession(authOptions);
 
@@ -36,6 +38,21 @@ export async function requireRole(allowedRoles: AppRole[]) {
       { error: "Forbidden: insufficient permissions" },
       { status: 403 }
     );
+  }
+
+  // Check if organization is disabled
+  if (session.user.organizationId) {
+    const org = await prisma.organization.findUnique({
+      where: { id: session.user.organizationId },
+      select: { disabled: true }
+    });
+
+    if (org?.disabled) {
+      return NextResponse.json(
+        { error: "Your organization has been disabled. Please contact support." },
+        { status: 403 }
+      );
+    }
   }
 
   return {

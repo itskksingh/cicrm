@@ -9,20 +9,20 @@
 |---|---|---|
 | Secrets in .env files | ✅ REAL but NOT in git | `git log` returned empty — `.env*` was always gitignored. **Safe.** |
 | NEXTAUTH_URL missing | ✅ REAL | Not in any env file |
-| NEXTAUTH_SECRET hardcoded | ✅ REAL | `"fallback-secret-for-dev"` in 3 files |
-| ENCRYPTION_KEY missing | ✅ REAL | Falls back to `crypto.randomBytes(32)` |
+| NEXTAUTH_SECRET hardcoded | ✅ FIXED | Removed from code, uses env var only |
+| ENCRYPTION_KEY missing | ✅ FIXED | Throws in prod, safe dev fallback in `lib/encryption.ts` |
 | REDIS_URL missing | ✅ REAL | Defaults to `localhost:6379` |
-| WhatsApp token unencrypted on onboarding | ✅ REAL | Line 39, `api/onboarding/route.ts` |
-| Webhook signature not verified | ✅ REAL | No `X-Hub-Signature-256` check |
+| WhatsApp token unencrypted on onboarding | ✅ FIXED | Verified encrypted in `api/onboarding/route.ts` |
+| Webhook signature not verified | ✅ FIXED | HMAC-SHA256 check added in `api/webhook/route.ts` |
 | No rate limiting | ✅ REAL | Zero rate limiting anywhere |
 | BullMQ worker can't run on Vercel | ✅ REAL | `scripts/worker.ts` needs separate host |
-| `getDefaultOrganizationId()` hardcoded | ✅ REAL | Creates "Crest Care Hospital" for unknown orgs |
+| `getDefaultOrganizationId()` hardcoded | ✅ FIXED | Now returns `null` instead of auto-creating |
 | Doctor data hardcoded in `lib/ai.ts` | ✅ REAL | ~150 lines of Crest Care-specific data |
-| Disclaimer hardcoded "Crest Care Hospital" | ✅ REAL | `lib/compliance/constants.ts` line 7 |
-| Fallback settings hardcoded | ✅ REAL | `lib/db/config.ts` — FALLBACK_SETTINGS has org name |
+| Disclaimer hardcoded "Crest Care Hospital" | ✅ FIXED | Now dynamic via `getFirstMessageDisclaimer(hospitalName)` |
+| Fallback settings hardcoded | ✅ FIXED | Crest Care removed from `lib/db/config.ts` |
 | Staff vs User model not linked | ✅ REAL | Two separate models, no FK between them |
-| Disabled org still has API access | ✅ REAL | Middleware only, API routes don't check |
-| Impersonation token has no expiry | ✅ REAL | No `maxAge` in `encode()` call |
+| Disabled org still has API access | ✅ FIXED | Checked in `requireRole()` in `lib/auth/rbac.ts` |
+| Impersonation token has no expiry | ✅ FIXED | `maxAge: 30m` added to `encode()` call |
 | No pgvector migrations folder | ✅ REAL | Only `prisma db push` used |
 | WhatsApp number not added during onboarding | ✅ REAL | `whatsapp_numbers` table never populated |
 | CRON_SECRET defaults to guessable string | ✅ REAL | Defaults to `"crestcare-cron"` |
@@ -32,22 +32,21 @@
 
 | Issue | File | Severity |
 |---|---|---|
-| `FALLBACK_SETTINGS['hospital_name']` = 'Crest Care Hospital' | `lib/db/config.ts:13` | HIGH |
-| `FIRST_MESSAGE_DISCLAIMER` hardcodes hospital name | `lib/compliance/constants.ts:7` | HIGH |
+| `FALLBACK_SETTINGS['hospital_name']` = 'Crest Care Hospital' | `lib/db/config.ts:13` | ✅ FIXED |
+| `FIRST_MESSAGE_DISCLAIMER` hardcodes hospital name | `lib/compliance/constants.ts:7` | ✅ FIXED |
 | `FALLBACK_DOCTORS` list hardcoded (not per-tenant) | `lib/db/config.ts:5-10` | MEDIUM |
 | `AUTO_REPLY_TEXT` in webhook route hardcoded to Crest Care | `app/api/webhook/route.ts:17-23` | MEDIUM |
 | No `organizationId` check in `/api/leads/[id]` | Unknown (need verify) | HIGH |
-| `build` script uses `--webpack` flag (non-standard) | `package.json:7` | LOW |
-| `next.config.ts` uses `turbopack: {}` + webpack build flag (conflict) | `next.config.ts:12` | MEDIUM |
+| `build` script uses `--webpack` flag (non-standard) | `package.json:7` | ✅ FIXED |
+| `next.config.ts` uses `turbopack: {}` + webpack build flag (conflict) | `next.config.ts:12` | ✅ FIXED |
 
 ---
 
 # CRITICAL — Fix BEFORE Any Deployment
 
-## C1. Set NEXTAUTH_SECRET (Blocks all auth security)
+## C1. Set NEXTAUTH_SECRET (✅ FIXED)
 - **Impact:** All JWTs signed with `"fallback-secret-for-dev"` — anyone can forge sessions
-- **Files:** `middleware.ts:17`, `app/api/auth/[...nextauth]/route.ts:110`, `app/api/super-admin/impersonate/route.ts:33`
-- **Fix:** Set env var + remove hardcoded fallback
+- **Fix:** Set env var + remove hardcoded fallback (Done)
 - **Time:** 15 minutes
 - **Blocks launch:** YES
 
@@ -58,10 +57,9 @@
 - **Time:** 5 minutes
 - **Blocks launch:** YES
 
-## C3. Set ENCRYPTION_KEY (Breaks WhatsApp token storage)
-- **Impact:** Each cold start generates new random key. All stored tokens become unreadable. Every hospital's WhatsApp disconnects after a restart.
-- **Files:** `lib/encryption.ts:5`
-- **Fix:** `openssl rand -hex 32` → save as `ENCRYPTION_KEY` env var
+## C3. Set ENCRYPTION_KEY (✅ FIXED)
+- **Impact:** Stored tokens become unreadable without a stable key.
+- **Fix:** Throws error in production if missing; uses dev fallback in `lib/encryption.ts`.
 - **Time:** 10 minutes
 - **Blocks launch:** YES
 
@@ -79,10 +77,9 @@
 - **Time:** 30 minutes
 - **Blocks launch:** YES
 
-## C6. Fix WhatsApp Token Encryption on Onboarding
-- **Impact:** Every hospital's WhatsApp token stored in plain text in DB. A DB breach = all tokens exposed.
-- **Files:** `app/api/onboarding/route.ts:39`
-- **Fix:** Wrap with `encrypt()` before saving
+## C6. Fix WhatsApp Token Encryption on Onboarding (✅ FIXED)
+- **Impact:** Tokens stored in plain text.
+- **Fix:** Verified encryption in `api/onboarding/route.ts`.
 - **Time:** 5 minutes
 - **Blocks launch:** YES (security compliance)
 
@@ -93,10 +90,9 @@ import { encrypt } from '@/lib/encryption';
 accessToken: encrypt(whatsappAccessToken),
 ```
 
-## C7. Add Webhook Signature Verification
-- **Impact:** Anyone can POST fake patient messages to your webhook. This can inject fake leads, trigger AI responses, and waste OpenAI credits.
-- **Files:** `app/api/webhook/route.ts`
-- **New env required:** `WHATSAPP_APP_SECRET`
+## C7. Add Webhook Signature Verification (✅ FIXED)
+- **Impact:** Spoofed patient messages.
+- **Fix:** HMAC-SHA256 check added in `api/webhook/route.ts`.
 - **Time:** 30 minutes
 - **Blocks launch:** YES (Meta compliance + security)
 
@@ -114,9 +110,9 @@ if (sig !== expected) {
 const body = JSON.parse(rawBody);
 ```
 
-## C8. Fix WhatsApp Number Mapping in Onboarding
-- **Impact:** New hospitals complete onboarding but webhook routing silently fails — messages go to wrong org or default fallback
-- **Files:** `app/api/onboarding/route.ts`
+## C8. Fix WhatsApp Number Mapping in Onboarding (✅ FIXED)
+- **Impact:** Webhook routing failures.
+- **Fix:** `whatsappDisplayPhone` added to onboarding flow and `whatsapp_numbers` table.
 - **Time:** 20 minutes
 - **Blocks launch:** YES for multi-tenant
 
@@ -134,15 +130,15 @@ await tx.whatsAppNumber.create({
 
 # HIGH PRIORITY — Fix Before Onboarding Real Hospitals
 
-## H1. Remove Hardcoded Hospital Name from Compliance Constants
-- **Impact:** Every new hospital's chatbot says "Crest Care Hospital" in the first message disclaimer
-- **Files:** `lib/compliance/constants.ts:7`
-- **Fix:** Pass `hospitalName` as a parameter from the org settings
+## H1. Remove Hardcoded Hospital Name from Compliance Constants (✅ FIXED)
+- **Impact:** "Crest Care Hospital" branding leak.
+- **Fix:** Now uses `getFirstMessageDisclaimer(hospitalName)` dynamically.
+- **Files:** `lib/compliance/constants.ts:7`, `lib/compliance/disclaimer.ts`
 
-## H2. Remove Hardcoded Hospital Name from `lib/db/config.ts`
-- **Impact:** `getSetting()` falls back to "Crest Care Hospital" for any org without settings
+## H2. Remove Hardcoded Hospital Name from `lib/db/config.ts` (✅ FIXED)
+- **Impact:** Fallback to "Crest Care Hospital".
+- **Fix:** Removed fallback or made it generic ("Your Hospital").
 - **Files:** `lib/db/config.ts:13`
-- **Fix:** Remove fallback or make it generic ("Your Hospital")
 
 ## H3. Remove Hardcoded Doctor Data from `lib/ai.ts`
 - **Impact:** All hospitals get Crest Care doctor schedules/fees in AI responses
@@ -150,25 +146,25 @@ await tx.whatsAppNumber.create({
 - **Fix:** Move to `Settings` table or `doctors` table per org. Load dynamically.
 - **Time:** 2-3 hours (most complex fix)
 
-## H4. Remove/Disable `getDefaultOrganizationId()` Auto-Create
-- **Impact:** Any webhook from unregistered number silently creates a "Crest Care Hospital" org
+## H4. Remove/Disable `getDefaultOrganizationId()` Auto-Create (✅ FIXED)
+- **Impact:** Auto-creating "Crest Care Hospital" for unknown orgs.
+- **Fix:** Now returns `null`.
 - **Files:** `lib/db/organization.ts`
-- **Fix:** Throw error or return `null` instead of auto-creating. All callers must handle null.
 
-## H5. Add `disabled` Check in API Routes
-- **Impact:** Disabling an org in super admin only blocks UI. API still works.
-- **Files:** `lib/auth/rbac.ts` → add org disabled check in `requireRole()`
+## H5. Add `disabled` Check in API Routes (✅ FIXED)
+- **Impact:** Disabled orgs still have API access.
+- **Fix:** Check added in `requireRole()` in `lib/auth/rbac.ts`.
 - **Time:** 30 minutes
 
-## H6. Add Impersonation Token Expiry
-- **Impact:** Impersonation tokens are valid forever (until secret rotates)
-- **Files:** `app/api/super-admin/impersonate/route.ts:25-34`
-- **Fix:** Add `maxAge: 60 * 30` to `encode()` call (30 minutes)
+## H6. Add Impersonation Token Expiry (✅ FIXED)
+- **Impact:** Tokens valid forever.
+- **Fix:** Added `maxAge: 60 * 30`.
+- **Files:** `app/api/super-admin/impersonate/route.ts:33`
 
-## H7. Fix CRON_SECRET Default
-- **Impact:** Default `"crestcare-cron"` is guessable — anyone can trigger mass follow-up messages
+## H7. Fix CRON_SECRET Default (✅ FIXED)
+- **Impact:** Guessable secret.
+- **Fix:** Throw error in production if missing; uses dev secret otherwise.
 - **Files:** `app/api/cron/followup/route.ts:41`
-- **Fix:** Set `CRON_SECRET` env var with `openssl rand -base64 24`
 
 ## H8. Create `vercel.json` for Cron Setup
 - **Impact:** Without this, follow-up messages never trigger in production
@@ -541,3 +537,45 @@ STEP 1: Rotate Secrets
 ---
 
 *Roadmap generated from direct code analysis of 40+ files. Every issue cross-verified against actual source.*
+
+---
+
+# NEXT ROADMAP — Remaining High Priority Tasks
+
+## 🚀 PHASE A: AI & Multi-Tenant Engine (The "Brain" Fix)
+**Goal:** Stop Crest Care data from leaking to other hospitals.
+
+1. **Move AI Deterministic Data to DB (H3)**
+   - Create a `Doctor` schedule management UI.
+   - Update `lib/ai.ts` to fetch `DOCTOR_SCHEDULE`, `DOCTOR_FEES`, and `HOSPITAL_INFO` from the database based on `organizationId`.
+   - Remove the ~150 lines of hardcoded Crest Care data.
+2. **Per-Tenant Knowledge Base Seeding (PHASE 2)**
+   - Update `scripts/seed-knowledge.ts` to accept an `organizationId`.
+   - Ensure `searchKnowledge` in `lib/knowledge.ts` strictly isolated by `organizationId`.
+
+## 🛡️ PHASE B: Infrastructure & Reliability
+**Goal:** Production-grade stability and security.
+
+1. **Switch to Prisma Migrations (M3)**
+   - Create a baseline migration: `npx prisma migrate dev --name init`.
+   - Ensure all future schema changes use migrations, not `db push`.
+2. **Add Rate Limiting (M2)**
+   - Implement `@upstash/ratelimit` on the `/api/webhook` route to prevent DoS attacks and credit exhaustion.
+3. **Link Staff to User Model (M5)**
+   - Add `userId` field to `Staff` model.
+   - Create a migration to link existing records.
+   - Update auth logic to ensure a logged-in user can access their assigned leads.
+
+## 📊 PHASE C: Observability & Compliance
+**Goal:** Monitoring and scaling.
+
+1. **Lead API Security Audit (H9)**
+   - Verify that `/api/leads/[id]` and other lead endpoints strictly enforce `organizationId` checks.
+2. **Add Sentry/Structured Logging (WEEK 4)**
+   - Integrate Sentry for error tracking.
+   - Add JSON logging to the BullMQ worker for better traceability.
+3. **Follow-up Template Configuration (PHASE 3)**
+   - Move follow-up message templates from `app/api/cron/followup/route.ts` to the `Settings` table per organization.
+
+---
+*Next focus: H3 (AI Refactor) and M3 (Prisma Migrations).*

@@ -154,7 +154,7 @@ const DOCTOR_FEES: Record<string, string> = {
 
 const HOSPITAL_INFO = {
   address: "Crest Care Hospital, Jamua, Giridih — Jamua थाना के पास | संपर्क: +91 92418 07380",
-  emergency: "Crest Care Hospital में 24/7 इमरजेंसी और एम्बुलेंस सेवा उपलब्ध है। तुरंत: +91 92418 07380",
+  emergency: "Crest Care Hospital में 24/7 इमरजेंसी और एम्बुलेंस सेवा उपलब्ध है। तुरंत: +91 9241 07380",
 };
 
 // ── Response Builders ──

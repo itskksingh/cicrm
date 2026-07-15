@@ -1,8 +1,14 @@
 import crypto from 'crypto';
 
 const ALGORITHM = 'aes-256-cbc';
-// Ensure ENCRYPTION_KEY is a 32-byte (64 character hex) string in production
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+
+if (!ENCRYPTION_KEY && process.env.NODE_ENV === 'production') {
+  throw new Error("ENCRYPTION_KEY is required in production. All WhatsApp tokens will be unreadable without it.");
+}
+
+// 32-byte hex string fallback for dev
+const EFFECTIVE_KEY = ENCRYPTION_KEY || "0000000000000000000000000000000000000000000000000000000000000000";
 
 /**
  * Encrypts a plain text string using AES-256-CBC.
@@ -13,7 +19,7 @@ export function encrypt(text: string): string {
   const iv = crypto.randomBytes(16);
   const cipher = crypto.createCipheriv(
     ALGORITHM, 
-    Buffer.from(ENCRYPTION_KEY, 'hex'), 
+    Buffer.from(EFFECTIVE_KEY, 'hex'),
     iv
   );
   
@@ -41,7 +47,7 @@ export function decrypt(encryptedText: string): string {
     const iv = Buffer.from(ivHex, 'hex');
     const decipher = crypto.createDecipheriv(
       ALGORITHM, 
-      Buffer.from(ENCRYPTION_KEY, 'hex'), 
+      Buffer.from(EFFECTIVE_KEY, 'hex'),
       iv
     );
     

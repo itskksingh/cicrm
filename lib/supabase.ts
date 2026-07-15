@@ -2,10 +2,6 @@ import { createClient } from "@supabase/supabase-js";
 
 let _supabase: any = null;
 
-/**
- * A proxy object that initializes the Supabase client on first access.
- * This prevents build-time errors when environment variables are missing.
- */
 export const supabase = new Proxy({} as any, {
   get(target, prop) {
     if (!_supabase) {

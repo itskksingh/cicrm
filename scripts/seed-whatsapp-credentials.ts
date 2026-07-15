@@ -14,6 +14,9 @@ async function main() {
 
   // Get the default organization (Crest Care Hospital)
   const organizationId = await getDefaultOrganizationId();
+  if (!organizationId) {
+    throw new Error("Default organization was not found. Create it before seeding credentials.");
+  }
 
   const encryptedToken = encrypt(token);
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 import { encrypt } from "@/lib/encryption";
@@ -16,12 +16,17 @@ export async function POST(req: Request) {
     const { 
       hospitalName, 
       whatsappPhoneNumberId, 
+      whatsappDisplayPhone,
       whatsappAccessToken, 
       doctorName, 
       doctorDepartment 
     } = await req.json();
 
     const organizationId = session.user.organizationId;
+
+    if (!organizationId) {
+      return NextResponse.json({ error: "Organization ID is required" }, { status: 400 });
+    }
 
     await prisma.$transaction(async (tx) => {
       // 1. Update Organization Name
@@ -42,7 +47,15 @@ export async function POST(req: Request) {
         },
       });
 
-      // 3. Create First Doctor
+      // 3. Create WhatsApp Number Mapping for Webhook Routing
+      await tx.whatsAppNumber.create({
+        data: {
+          phoneNumber: whatsappDisplayPhone,
+          organizationId,
+        },
+      });
+
+      // 4. Create First Doctor
       await tx.doctor.create({
         data: {
           name: doctorName,

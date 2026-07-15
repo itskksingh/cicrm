@@ -31,3 +31,32 @@ export async function getOrganizationByWhatsAppNumber(phoneNumber: string) {
     return null
   }
 }
+
+export async function getOrganizationByPhoneNumberId(phoneNumberId: string) {
+  try {
+    const credential = await prisma.whatsAppCredential.findFirst({
+      where: { phoneNumberId },
+      select: {
+        organizationId: true,
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            disabled: true,
+            onboardingComplete: true,
+          },
+        },
+      },
+    });
+
+    if (!credential || credential.organization.disabled) return null;
+
+    return {
+      organizationId: credential.organizationId,
+      organization: credential.organization,
+    };
+  } catch (error) {
+    console.error("Error fetching organization by WhatsApp phone number ID:", error);
+    return null;
+  }
+}

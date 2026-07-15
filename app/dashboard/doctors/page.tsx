@@ -19,9 +19,8 @@ export default async function DoctorsPage() {
     );
   }
 
-  const orgId = session.user.organizationId;
   const doctors = await prisma.doctor.findMany({
-    where: { organizationId: orgId },
+    where: { organizationId: session.user.organizationId as string },
     orderBy: { name: 'asc' }
   });
 

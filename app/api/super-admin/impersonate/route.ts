@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { encode } from "next-auth/jwt";
 
@@ -27,10 +27,12 @@ export async function POST(req: Request) {
       id: adminUser.id,
       email: adminUser.email,
       role: adminUser.role,
+      phone: adminUser.phone,
       organizationId: adminUser.organizationId,
       impersonatedBy: session.user.id, // Audit trail
     },
-    secret: process.env.NEXTAUTH_SECRET || "fallback-secret-for-dev",
+    secret: process.env.NEXTAUTH_SECRET!,
+    maxAge: 60 * 30, // 30 minutes
   });
 
   return NextResponse.json({ token: impersonationToken });

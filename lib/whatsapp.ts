@@ -1,15 +1,13 @@
 export async function sendWhatsAppReply(
   to: string, 
   text: string,
-  credentials?: { accessToken: string; phoneNumberId: string }
-): Promise<void> {
-  const token = credentials?.accessToken || process.env.WHATSAPP_TOKEN;
-  const phoneNumberId = credentials?.phoneNumberId || process.env.PHONE_NUMBER_ID;
+  credentials: { accessToken: string; phoneNumberId: string }
+): Promise<{ messageId?: string }> {
+  const token = credentials.accessToken;
+  const phoneNumberId = credentials.phoneNumberId;
 
   if (!token || !phoneNumberId) {
-    console.error(`[WhatsApp Error] Missing credentials (token or phoneNumberId).`);
-    console.error(`[WhatsApp Error] Message to ${to} skipped to prevent system crash.`);
-    return;
+    throw new Error("Dedicated WhatsApp credentials are required");
   }
 
   const url = `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`;
@@ -35,7 +33,10 @@ export async function sendWhatsAppReply(
       });
 
       if (response.ok) {
-        return; // Success
+        const data = (await response.json()) as {
+          messages?: Array<{ id?: string }>;
+        };
+        return { messageId: data.messages?.[0]?.id };
       }
 
       const errText = await response.text();
@@ -50,16 +51,19 @@ export async function sendWhatsAppReply(
       if (attempt === maxRetries) {
         throw new Error(`WhatsApp API server error: ${response.status}`);
       }
-    } catch (error: any) {
-      if (attempt === maxRetries || error.message?.includes('client error')) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (attempt === maxRetries || message.includes('client error')) {
         console.error(`[WhatsApp Error] Failed to send message to ${to} after ${attempt + 1} attempts.`);
         throw error;
       }
-      console.warn(`[WhatsApp API Warning] Network or server error: ${error.message}. Retrying...`);
+      console.warn(`[WhatsApp API Warning] Network or server error: ${message}. Retrying...`);
     }
 
     attempt++;
     const backoffTime = 500 * Math.pow(3, attempt - 1);
     await new Promise(resolve => setTimeout(resolve, backoffTime));
   }
+
+  throw new Error("WhatsApp send failed without a terminal response");
 }

@@ -13,6 +13,7 @@ export default function OnboardingPage() {
   const [formData, setFormData] = useState({
     hospitalName: "",
     whatsappPhoneNumberId: "",
+    whatsappDisplayPhone: "",
     whatsappAccessToken: "",
     doctorName: "",
     doctorDepartment: "General",
@@ -101,6 +102,16 @@ export default function OnboardingPage() {
                   />
                 </div>
                 <div>
+                  <label className="block text-[10px] font-black text-outline uppercase tracking-widest mb-2">WhatsApp Display Phone Number</label>
+                  <input
+                    type="text"
+                    value={formData.whatsappDisplayPhone}
+                    onChange={(e) => setFormData({ ...formData, whatsappDisplayPhone: e.target.value })}
+                    placeholder="e.g. +919876543210"
+                    className="w-full px-4 py-3.5 rounded-2xl border border-[#E2E8F0] focus:ring-2 focus:ring-primary/20 outline-none transition-all font-medium"
+                  />
+                </div>
+                <div>
                   <label className="block text-[10px] font-black text-outline uppercase tracking-widest mb-2">System Access Token</label>
                   <input
                     type="password"
@@ -115,7 +126,7 @@ export default function OnboardingPage() {
                 <button onClick={prevStep} className="flex-1 bg-[#F1F5F9] text-outline font-black py-4 rounded-2xl">BACK</button>
                 <button 
                   onClick={nextStep} 
-                  disabled={!formData.whatsappPhoneNumberId || !formData.whatsappAccessToken}
+                  disabled={!formData.whatsappPhoneNumberId || !formData.whatsappDisplayPhone || !formData.whatsappAccessToken}
                   className="flex-2 bg-primary text-white font-black py-4 rounded-2xl shadow-lg active:scale-[0.98] transition-all disabled:opacity-50"
                 >
                   CONTINUE

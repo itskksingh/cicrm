@@ -1,11 +1,11 @@
-import { FIRST_MESSAGE_DISCLAIMER, FOOTER_DISCLAIMER } from "./constants";
+import { getFirstMessageDisclaimer, FOOTER_DISCLAIMER } from "./constants";
 
-export function appendDisclaimer(text: string, isFirstMessage: boolean): string {
+export function appendDisclaimer(text: string, isFirstMessage: boolean, hospitalName: string = "Our Hospital"): string {
   let finalResponse = text;
 
   // If it's the very first message from the user to the bot
   if (isFirstMessage) {
-    finalResponse = `${FIRST_MESSAGE_DISCLAIMER}\n\n${finalResponse}`;
+    finalResponse = `${getFirstMessageDisclaimer(hospitalName)}\n\n${finalResponse}`;
   }
 
   // Always append footer
